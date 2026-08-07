@@ -1,6 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { ArrowLeft, Check, ChevronRight, Dumbbell, Flame, User, Settings, TrendingUp, Plus, Trash2, Clock, ChevronDown, ChevronUp } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"; import { ArrowLeft, Check, ChevronRight, Dumbbell, Flame, User, Settings, TrendingUp, Plus, Trash2, Clock, ChevronDown, ChevronUp } from "lucide-react"; import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 /* ── activities ── */
 const BUILT_IN = [
@@ -30,8 +28,7 @@ const CAT_COLOR = {
   "Cardio":"#5B8FA8","Arm & Shoulder":"#D9A441",
   "Back":"#4A8C7C","Leg":"#B2593F","Core":"#9B9284"
 };
-const CATS  = ["Cardio","Arm & Shoulder","Back","Leg","Core"];
-const TYPES = { strength:"Standard (weight + reps)", cardio:"Cardio (speed/time)", rotary:"Rotary (left + right reps)" };
+const CATS  = ["Cardio","Arm & Shoulder","Back","Leg","Core"]; const TYPES = { strength:"Standard (weight + reps)", cardio:"Cardio (speed/time)", rotary:"Rotary (left + right reps)" };
 
 function buildOrder(acts) {
   const treadmill = acts.filter(a => a.cat === "Cardio");
@@ -56,10 +53,7 @@ function fmtDate(s) {
   const [y,m,d] = s.split("-").map(Number);
   return new Date(y,m-1,d).toLocaleDateString(undefined,{month:"short",day:"numeric"});
 }
-function nv(v) { const f = parseFloat(v); return isFinite(f) ? f : 0; }
-function calcBMI(h,w) { return (!h||!w) ? null : 703*w/(h*h); }
-function bmiLabel(v) { return v<18.5?"Underweight":v<25?"Normal":v<30?"Overweight":"Obese"; }
-function blankEntry() {
+function nv(v) { const f = parseFloat(v); return isFinite(f) ? f : 0; } function calcBMI(h,w) { return (!h||!w) ? null : 703*w/(h*h); } function bmiLabel(v) { return v<18.5?"Underweight":v<25?"Normal":v<30?"Overweight":"Obese"; } function blankEntry() {
   return {
     incline:"", speed:"", time:"", rating:null,
     incCarried:false, spdCarried:false, incTouched:false, spdTouched:false,
@@ -67,15 +61,11 @@ function blankEntry() {
   };
 }
 
-/* ── storage: window.storage when published, in-memory fallback ── */
-const _mem = {};
-async function sGet(key) {
+/* ── storage: window.storage when published, in-memory fallback ── */ const _mem = {}; async function sGet(key) {
   if (window.storage) {
     try { const r = await window.storage.get(key, false); return r && r.value ? JSON.parse(r.value) : null; } catch(e) {}
   }
-  return _mem[key] !== undefined ? _mem[key] : null;
-}
-async function sSet(key, val) {
+  return _mem[key] !== undefined ? _mem[key] : null; } async function sSet(key, val) {
   _mem[key] = val;
   if (window.storage) {
     try { await window.storage.set(key, JSON.stringify(val), false); } catch(e) {}
@@ -117,8 +107,7 @@ const S = {
            width:"100%", borderRadius:8, padding:"14px 16px", display:"flex", alignItems:"center", gap:12 },
   rngBtn:  { background:"transparent", border:"1px solid #3A362F", color:"#8A8478", cursor:"pointer",
              padding:"7px 0", borderRadius:4, fontSize:12, fontFamily:"inherit", flex:1 },
-  rngBtnOn:{ background:"#211F1B", border:"1px solid #D9A441", color:"#D9A441" },
-};
+  rngBtnOn:{ background:"#211F1B", border:"1px solid #D9A441", color:"#D9A441" }, };
 
 /* ── NumField ── */
 function NumField({ label, fkey, value, onChange, suffix, carried }) {
@@ -147,8 +136,7 @@ function Dot({ cat, size=11 }) {
 
 /* ════════════════════════════════════════
    HOME SCREEN
-════════════════════════════════════════ */
-function HomeScreen({ profile, onProfile, log, weightLog, acts, onGo }) {
+════════════════════════════════════════ */ function HomeScreen({ profile, onProfile, log, weightLog, acts, onGo }) {
   const bmi = useMemo(() => calcBMI(nv(profile.heightIn), nv(profile.weightLb)), [profile]);
   const ordered = useMemo(() => buildOrder(acts), [acts]);
   const today = todayStr();
@@ -262,8 +250,7 @@ function HomeScreen({ profile, onProfile, log, weightLog, acts, onGo }) {
 
 /* ════════════════════════════════════════
    LIST SCREEN
-════════════════════════════════════════ */
-function ListScreen({ acts, log, onHome, onPick }) {
+════════════════════════════════════════ */ function ListScreen({ acts, log, onHome, onPick }) {
   const today = todayStr();
   const ordered = useMemo(() => buildOrder(acts), [acts]);
   const done = useMemo(() => new Set(log.filter(e=>e.date===today).map(e=>e.name)), [log, today]);
@@ -318,8 +305,7 @@ function ListScreen({ acts, log, onHome, onPick }) {
 
 /* ════════════════════════════════════════
    ACTIVITY SCREEN
-════════════════════════════════════════ */
-function ActivityScreen({ activity, lastEntry, onBack, onHome, onSave }) {
+════════════════════════════════════════ */ function ActivityScreen({ activity, lastEntry, onBack, onHome, onSave }) {
   const isCardio = activity.type === "cardio";
   const isRotary = activity.type === "rotary";
 
@@ -446,8 +432,7 @@ function ActivityScreen({ activity, lastEntry, onBack, onHome, onSave }) {
 
 /* ════════════════════════════════════════
    MANAGE SCREEN
-════════════════════════════════════════ */
-function ManageScreen({ acts, onBack, onAdd, onDelete }) {
+════════════════════════════════════════ */ function ManageScreen({ acts, onBack, onAdd, onDelete }) {
   const [form, setForm] = useState({ name:"", cat:"Arm & Shoulder", type:"strength" });
   function add() {
     const nm = form.name.trim();
@@ -504,8 +489,7 @@ function ManageScreen({ acts, onBack, onAdd, onDelete }) {
 
 /* ════════════════════════════════════════
    GRAPH SCREEN
-════════════════════════════════════════ */
-function GraphScreen({ weightLog, onBack }) {
+════════════════════════════════════════ */ function GraphScreen({ weightLog, onBack }) {
   const [range, setRange] = useState("month");
   const rangeDays = { week:7, month:30, "3m":90, "6m":180, year:365 };
 
@@ -572,9 +556,7 @@ function GraphScreen({ weightLog, onBack }) {
 ════════════════════════════════════════ */
 /* ════════════════════════════════════════
    HISTORY SCREEN
-════════════════════════════════════════ */
-const RATING_LABEL = { easy:"😌 Easy", good:"💪 Good", too_hard:"🔥 Too Hard" };
-const RATING_COLOR = { easy:"#7AC4A8", good:"#D9A441", too_hard:"#E07050" };
+════════════════════════════════════════ */ const RATING_LABEL = { easy:"😌 Easy", good:"💪 Good", too_hard:"🔥 Too Hard" }; const RATING_COLOR = { easy:"#7AC4A8", good:"#D9A441", too_hard:"#E07050" };
 
 function HistoryScreen({ log, onBack, onDeleteEntry, onDeleteDay }) {
   const [expanded, setExpanded] = useState({});
