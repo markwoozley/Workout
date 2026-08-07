@@ -1,0 +1,789 @@
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { ArrowLeft, Check, ChevronRight, Dumbbell, Flame, User, Settings, TrendingUp, Plus, Trash2, Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+
+/* ── activities ── */
+const BUILT_IN = [
+  { name:"Treadmill",           cat:"Cardio",         type:"cardio"   },
+  { name:"Abdominal Backward",  cat:"Core",           type:"strength" },
+  { name:"Abdominal Forward",   cat:"Core",           type:"strength" },
+  { name:"Rotary Torso",        cat:"Core",           type:"rotary"   },
+  { name:"Abduction",           cat:"Leg",            type:"strength" },
+  { name:"Adduction",           cat:"Leg",            type:"strength" },
+  { name:"Leg Curl",            cat:"Leg",            type:"strength" },
+  { name:"Leg Extension",       cat:"Leg",            type:"strength" },
+  { name:"Leg Press",           cat:"Leg",            type:"strength" },
+  { name:"Back Extension",      cat:"Back",           type:"strength" },
+  { name:"Lat Pull Down",       cat:"Back",           type:"strength" },
+  { name:"Pullover",            cat:"Back",           type:"strength" },
+  { name:"Seated Row",          cat:"Back",           type:"strength" },
+  { name:"Biceps Curl",         cat:"Arm & Shoulder", type:"strength" },
+  { name:"Chest Press",         cat:"Arm & Shoulder", type:"strength" },
+  { name:"Deltoid",             cat:"Arm & Shoulder", type:"strength" },
+  { name:"Deltoid Raise",       cat:"Arm & Shoulder", type:"strength" },
+  { name:"Pectoral",            cat:"Arm & Shoulder", type:"strength" },
+  { name:"Shoulder Press",      cat:"Arm & Shoulder", type:"strength" },
+  { name:"Triceps Extension",   cat:"Arm & Shoulder", type:"strength" },
+];
+
+const CAT_COLOR = {
+  "Cardio":"#5B8FA8","Arm & Shoulder":"#D9A441",
+  "Back":"#4A8C7C","Leg":"#B2593F","Core":"#9B9284"
+};
+const CATS  = ["Cardio","Arm & Shoulder","Back","Leg","Core"];
+const TYPES = { strength:"Standard (weight + reps)", cardio:"Cardio (speed/time)", rotary:"Rotary (left + right reps)" };
+
+function buildOrder(acts) {
+  const treadmill = acts.filter(a => a.cat === "Cardio");
+  const cats = ["Arm & Shoulder","Back","Leg","Core"];
+  const bc = {};
+  cats.forEach(c => { bc[c] = acts.filter(a => a.cat === c).sort((a,b) => a.name.localeCompare(b.name)); });
+  const order = [...treadmill];
+  let added = true;
+  while (added) {
+    added = false;
+    cats.forEach(c => { if (bc[c] && bc[c].length) { order.push(bc[c].shift()); added = true; } });
+  }
+  return order;
+}
+
+/* ── utils ── */
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function fmtDate(s) {
+  const [y,m,d] = s.split("-").map(Number);
+  return new Date(y,m-1,d).toLocaleDateString(undefined,{month:"short",day:"numeric"});
+}
+function nv(v) { const f = parseFloat(v); return isFinite(f) ? f : 0; }
+function calcBMI(h,w) { return (!h||!w) ? null : 703*w/(h*h); }
+function bmiLabel(v) { return v<18.5?"Underweight":v<25?"Normal":v<30?"Overweight":"Obese"; }
+function blankEntry() {
+  return {
+    incline:"", speed:"", time:"", rating:null,
+    incCarried:false, spdCarried:false, incTouched:false, spdTouched:false,
+    sets:[0,1,2].map(()=>({ weight:"",reps:"",leftReps:"",rightReps:"",carried:false,touched:false }))
+  };
+}
+
+/* ── storage: window.storage when published, in-memory fallback ── */
+const _mem = {};
+async function sGet(key) {
+  if (window.storage) {
+    try { const r = await window.storage.get(key, false); return r && r.value ? JSON.parse(r.value) : null; } catch(e) {}
+  }
+  return _mem[key] !== undefined ? _mem[key] : null;
+}
+async function sSet(key, val) {
+  _mem[key] = val;
+  if (window.storage) {
+    try { await window.storage.set(key, JSON.stringify(val), false); } catch(e) {}
+  }
+}
+
+/* ── styles ── */
+const S = {
+  page:   { padding:"28px 18px 70px", maxWidth:420, margin:"0 auto" },
+  surf:   { background:"#211F1B", border:"1px solid #3A362F", borderRadius:8 },
+  eyebrow:{ fontSize:11, letterSpacing:"0.14em", textTransform:"uppercase", color:"#8A8478", display:"block", marginBottom:6 },
+  eyeSm:  { fontSize:10, letterSpacing:"0.1em",  textTransform:"uppercase", color:"#8A8478" },
+  muted:  { color:"#8A8478" },
+  muted2: { color:"#6E695E" },
+  accent: { color:"#D9A441" },
+  text:   { color:"#F2EFE9" },
+  divTop: { borderTop:"1px solid #3A362F" },
+  ti: { background:"#1F1D1A", border:"1px solid #3A362F", color:"#F2EFE9", width:"100%",
+        borderRadius:6, padding:"10px 12px", fontSize:16, fontFamily:"inherit", outline:"none", WebkitAppearance:"none" },
+  ni: { background:"#1F1D1A", border:"1px solid #3A362F", color:"#F2EFE9", width:"100%",
+        borderRadius:6, padding:"10px 12px", fontSize:18, fontFamily:"'Courier New',Courier,monospace", outline:"none", WebkitAppearance:"none" },
+  niCarried:{ color:"#E5493D", borderColor:"#6B2E28" },
+  si: { background:"#1F1D1A", border:"1px solid #3A362F", color:"#F2EFE9", width:"100%",
+        borderRadius:6, padding:"10px 12px", fontSize:15, fontFamily:"inherit", outline:"none", WebkitAppearance:"none" },
+  btn: { background:"#D9A441", color:"#1C1B1A", border:"none", cursor:"pointer", width:"100%",
+         padding:"14px 0", borderRadius:6, fontSize:15, fontWeight:700, fontFamily:"inherit",
+         letterSpacing:"0.08em", textTransform:"uppercase", display:"flex", alignItems:"center", justifyContent:"center", gap:8 },
+  btnOut:{ background:"transparent", border:"1px solid #3A362F", color:"#F2EFE9", cursor:"pointer",
+           width:"100%", padding:"12px 0", borderRadius:6, fontSize:14, fontFamily:"inherit",
+           fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase" },
+  btnSm: { background:"transparent", border:"1px solid #3A362F", color:"#F2EFE9", cursor:"pointer",
+           padding:"8px 12px", borderRadius:4, fontSize:12, fontFamily:"inherit",
+           letterSpacing:"0.05em", textTransform:"uppercase", display:"flex", alignItems:"center", justifyContent:"center", gap:6, flex:1 },
+  btnDel:{ background:"transparent", border:"1px solid #6B2E28", color:"#E5493D", cursor:"pointer",
+           padding:"6px 10px", borderRadius:4, fontSize:12, fontFamily:"inherit" },
+  back:  { background:"transparent", border:"none", color:"#8A8478", cursor:"pointer",
+           display:"inline-flex", alignItems:"center", gap:6, fontSize:14, fontFamily:"inherit", padding:0 },
+  card:  { background:"#211F1B", border:"1px solid #3A362F", cursor:"pointer", textAlign:"left",
+           width:"100%", borderRadius:8, padding:"14px 16px", display:"flex", alignItems:"center", gap:12 },
+  rngBtn:  { background:"transparent", border:"1px solid #3A362F", color:"#8A8478", cursor:"pointer",
+             padding:"7px 0", borderRadius:4, fontSize:12, fontFamily:"inherit", flex:1 },
+  rngBtnOn:{ background:"#211F1B", border:"1px solid #D9A441", color:"#D9A441" },
+};
+
+/* ── NumField ── */
+function NumField({ label, fkey, value, onChange, suffix, carried }) {
+  return (
+    <label style={{display:"block"}}>
+      <span style={S.eyebrow}>
+        {label}
+        {carried && <span style={{color:"#E5493D",textTransform:"none",marginLeft:6}}>· carried over</span>}
+      </span>
+      <div style={{position:"relative"}}>
+        <input type="number" inputMode="decimal"
+          value={value} placeholder="0"
+          onChange={e => onChange(fkey, e.target.value)}
+          style={{...S.ni, ...(carried ? S.niCarried : {}), paddingRight: suffix ? 40 : 12}}
+        />
+        {suffix && <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:12,...S.muted,fontFamily:"'Courier New',Courier,monospace"}}>{suffix}</span>}
+      </div>
+    </label>
+  );
+}
+
+/* ── Dot ── */
+function Dot({ cat, size=11 }) {
+  return <span style={{width:size,height:size,background:CAT_COLOR[cat],borderRadius:"50%",display:"inline-block",flexShrink:0}}/>;
+}
+
+/* ════════════════════════════════════════
+   HOME SCREEN
+════════════════════════════════════════ */
+function HomeScreen({ profile, onProfile, log, weightLog, acts, onGo }) {
+  const bmi = useMemo(() => calcBMI(nv(profile.heightIn), nv(profile.weightLb)), [profile]);
+  const ordered = useMemo(() => buildOrder(acts), [acts]);
+  const today = todayStr();
+  const doneCount = useMemo(() => log.filter(e => e.date === today).length, [log, today]);
+  const l6 = useMemo(() => {
+    const days = {};
+    log.forEach(e => {
+      if (!e.sets) return;
+      const w = e.sets.reduce((a,s) => a + nv(s.weight)*(nv(s.reps)||nv(s.leftReps)+nv(s.rightReps)), 0);
+      days[e.date] = (days[e.date]||0) + w;
+    });
+    return Object.entries(days).sort((a,b) => b[0].localeCompare(a[0])).slice(0,6);
+  }, [log]);
+  const l6total = l6.reduce((a,[,w]) => a+w, 0);
+
+  return (
+    <div style={S.page}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+        <span style={S.accent}><Dumbbell size={22}/></span>
+        <h1 style={{fontSize:24,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",...S.text}}>Iron Log</h1>
+      </div>
+      <p style={{fontSize:14,marginBottom:24,...S.muted}}>Your workout, tracked set by set.</p>
+
+      {/* Profile card */}
+      <div style={{...S.surf, padding:16, marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+          <span style={S.muted}><User size={14}/></span>
+          <span style={{...S.eyebrow,display:"inline",margin:0}}>Profile</span>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <label><span style={S.eyebrow}>Name</span>
+            <input style={S.ti} value={profile.name} placeholder="Your name"
+              onChange={e => onProfile({...profile, name:e.target.value})}/>
+          </label>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <label><span style={S.eyebrow}>Height</span>
+              <div style={{position:"relative"}}>
+                <input type="number" inputMode="decimal" style={{...S.ni,fontSize:16,paddingRight:34}}
+                  value={profile.heightIn} placeholder="70"
+                  onChange={e => onProfile({...profile, heightIn:e.target.value})}/>
+                <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:12,...S.muted}}>in</span>
+              </div>
+            </label>
+            <label><span style={S.eyebrow}>Weight</span>
+              <div style={{position:"relative"}}>
+                <input type="number" inputMode="decimal" style={{...S.ni,fontSize:16,paddingRight:32}}
+                  value={profile.weightLb} placeholder="165"
+                  onChange={e => onProfile({...profile, weightLb:e.target.value})}/>
+                <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:12,...S.muted}}>lb</span>
+              </div>
+            </label>
+          </div>
+        </div>
+        {bmi && (
+          <div style={{...S.divTop, marginTop:16, paddingTop:16, display:"flex", alignItems:"center", justifyContent:"space-between"}}>
+            <div>
+              <span style={S.eyebrow}>BMI</span>
+              <div style={{fontSize:24,fontFamily:"'Courier New',Courier,monospace",...S.text}}>{bmi.toFixed(1)}</div>
+            </div>
+            <span style={{border:"1px solid #D9A441",color:"#D9A441",fontSize:12,padding:"4px 10px",borderRadius:9999}}>{bmiLabel(bmi)}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Last 6 workouts */}
+      <div style={{...S.surf, padding:16, marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+          <span style={S.muted}><Flame size={14}/></span>
+          <span style={{...S.eyebrow,display:"inline",margin:0}}>Last 6 Workouts</span>
+        </div>
+        <div style={{fontSize:26,fontFamily:"'Courier New',Courier,monospace",marginBottom:4,...S.text}}>
+          {Math.round(l6total).toLocaleString()} <span style={{fontSize:14,fontFamily:"inherit",...S.muted}}>lb lifted</span>
+        </div>
+        {l6.length===0
+          ? <p style={{fontSize:14,marginTop:8,...S.muted}}>No workouts logged yet.</p>
+          : <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:12}}>
+              {l6.map(([date,w]) => (
+                <div key={date} style={{background:"#1F1D1A",border:"1px solid #3A362F",borderRadius:6,padding:"6px 10px",textAlign:"center"}}>
+                  <div style={S.eyeSm}>{fmtDate(date)}</div>
+                  <div style={{fontSize:13,fontFamily:"'Courier New',Courier,monospace",...S.text}}>{Math.round(w).toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+        }
+      </div>
+
+      {/* Start / Resume */}
+      {doneCount > 0
+        ? <div style={{...S.surf,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            <div>
+              <div style={{...S.eyebrow,marginBottom:2}}>Today's Progress</div>
+              <div style={{fontSize:14,fontWeight:600,...S.text}}>{doneCount} of {ordered.length} done</div>
+            </div>
+            <button style={{...S.btn,width:"auto",padding:"10px 16px",fontSize:13}} onClick={()=>onGo("list")}>
+              Resume <ChevronRight size={16}/>
+            </button>
+          </div>
+        : <button style={{...S.btn,marginBottom:12}} onClick={()=>onGo("list")}>
+            Start Today's Workout <ChevronRight size={18}/>
+          </button>
+      }
+
+      <div style={{display:"flex",gap:10,marginTop:4}}>
+        <button style={S.btnSm} onClick={()=>onGo("graph")}><TrendingUp size={14}/> Weight Graph</button>
+        <button style={S.btnSm} onClick={()=>onGo("history")}><Clock size={14}/> History</button>
+        <button style={S.btnSm} onClick={()=>onGo("manage")}><Settings size={14}/> Activities</button>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════
+   LIST SCREEN
+════════════════════════════════════════ */
+function ListScreen({ acts, log, onHome, onPick }) {
+  const today = todayStr();
+  const ordered = useMemo(() => buildOrder(acts), [acts]);
+  const done = useMemo(() => new Set(log.filter(e=>e.date===today).map(e=>e.name)), [log, today]);
+  const remaining = ordered.filter(a => !done.has(a.name));
+  const todayTotal = useMemo(() =>
+    log.filter(e=>e.date===today&&e.sets)
+       .reduce((s,e)=>s+e.sets.reduce((a,st)=>a+nv(st.weight)*(nv(st.reps)||nv(st.leftReps)+nv(st.rightReps)),0),0),
+    [log, today]);
+
+  if (!remaining.length) return (
+    <div style={S.page}>
+      <button style={S.back} onClick={onHome} ><ArrowLeft size={16}/> Home</button>
+      <div style={{...S.surf,padding:24,textAlign:"center",marginTop:24}}>
+        <span style={{...S.accent,display:"block",marginBottom:12}}><Check size={30}/></span>
+        <h2 style={{fontSize:20,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",...S.text,marginBottom:4}}>Workout Complete</h2>
+        <p style={{fontSize:14,marginBottom:16,...S.muted}}>Every activity logged for today.</p>
+        <div style={{fontSize:24,fontFamily:"'Courier New',Courier,monospace",...S.text}}>{Math.round(todayTotal).toLocaleString()} lb</div>
+        <div style={{...S.eyebrow,marginTop:4}}>Total lifted today</div>
+      </div>
+      <button style={{...S.btnOut,marginTop:20}} onClick={onHome}>Back to Home</button>
+    </div>
+  );
+
+  return (
+    <div style={S.page}>
+      <button style={{...S.back,marginBottom:14}} onClick={onHome}><ArrowLeft size={16}/> Home</button>
+      <h2 style={{fontSize:20,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",...S.text,marginBottom:4}}>Today's Workout</h2>
+      <p style={{fontSize:14,marginBottom:14,...S.muted}}>Pick the next activity.</p>
+
+      {/* progress bar */}
+      <div style={{display:"flex",gap:3,marginBottom:22}}>
+        {ordered.map(a => (
+          <span key={a.name} style={{height:8,flex:1,borderRadius:9999,background:done.has(a.name)?CAT_COLOR[a.cat]:"#3A362F"}} title={a.name}/>
+        ))}
+      </div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {remaining.map(a => (
+          <button key={a.name} style={S.card} onClick={()=>onPick(a)}>
+            <Dot cat={a.cat}/>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:600,...S.text}}>{a.name}</div>
+              <div style={S.eyeSm}>{a.cat}</div>
+            </div>
+            <span style={S.muted2}><ChevronRight size={18}/></span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════
+   ACTIVITY SCREEN
+════════════════════════════════════════ */
+function ActivityScreen({ activity, lastEntry, onBack, onHome, onSave }) {
+  const isCardio = activity.type === "cardio";
+  const isRotary = activity.type === "rotary";
+
+  const [entry, setEntry] = useState(() => {
+    const e = blankEntry();
+    if (isCardio) {
+      e.incline = lastEntry ? (lastEntry.incline ?? "") : "";
+      e.speed   = lastEntry ? (lastEntry.speed   ?? "") : "";
+      e.incCarried = e.incline !== "";
+      e.spdCarried = e.speed   !== "";
+    } else {
+      [0,1,2].forEach(i => {
+        const w = lastEntry && lastEntry.sets && lastEntry.sets[i] ? (lastEntry.sets[i].weight ?? "") : "";
+        e.sets[i].weight  = w;
+        e.sets[i].carried = w !== "";
+      });
+    }
+    return e;
+  });
+
+  function handleField(key, val) {
+    if (key === "incline") { setEntry(e => ({...e, incline:val, incTouched:true})); return; }
+    if (key === "speed")   { setEntry(e => ({...e, speed:val,   spdTouched:true})); return; }
+    if (key === "time")    { setEntry(e => ({...e, time:val}));                      return; }
+    const m = key.match(/^(\d+)-(weight|reps|leftReps|rightReps)$/);
+    if (m) {
+      const i = parseInt(m[1]), sub = m[2];
+      setEntry(e => {
+        const sets = e.sets.map((s,idx) => idx===i ? {...s,[sub]:val,...(sub==="weight"?{touched:true}:{})} : s);
+        return {...e, sets};
+      });
+    }
+  }
+
+  function save() {
+    const rec = { id:Date.now(), date:todayStr(), name:activity.name, cat:activity.cat, type:activity.type, rating:entry.rating };
+    if (isCardio) {
+      rec.incline = entry.incline; rec.speed = entry.speed; rec.time = entry.time;
+    } else {
+      rec.sets = entry.sets.map(s => ({ weight:s.weight, reps:s.reps, leftReps:s.leftReps, rightReps:s.rightReps }));
+    }
+    onSave(rec);
+  }
+
+  return (
+    <div style={S.page}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <button style={S.back} onClick={onBack}><ArrowLeft size={16}/> Activities</button>
+        <button style={{...S.back,textDecoration:"underline",textUnderlineOffset:3}} onClick={onHome}>Summary</button>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+        <Dot cat={activity.cat}/>
+        <span style={{...S.eyebrow,display:"inline",margin:0}}>{activity.cat}</span>
+      </div>
+      <h2 style={{fontSize:22,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",...S.text,marginBottom:22}}>{activity.name}</h2>
+
+      {isCardio && (
+        <div style={{...S.surf,padding:16,display:"flex",flexDirection:"column",gap:14}}>
+          <NumField label="Incline" fkey="incline" value={entry.incline} onChange={handleField} suffix="%" carried={entry.incCarried&&!entry.incTouched}/>
+          <NumField label="Speed"   fkey="speed"   value={entry.speed}   onChange={handleField} suffix="mph" carried={entry.spdCarried&&!entry.spdTouched}/>
+          <NumField label="Time"    fkey="time"    value={entry.time}    onChange={handleField} suffix="min"/>
+        </div>
+      )}
+
+      {isRotary && (
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {entry.sets.map((s,i) => (
+            <div key={i} style={{...S.surf,padding:16}}>
+              <span style={{...S.eyebrow}}>Set {i+1}</span>
+              <NumField label="Weight" fkey={`${i}-weight`} value={s.weight} onChange={handleField} suffix="lb" carried={s.carried&&!s.touched}/>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
+                <NumField label="Left Reps"  fkey={`${i}-leftReps`}  value={s.leftReps}  onChange={handleField}/>
+                <NumField label="Right Reps" fkey={`${i}-rightReps`} value={s.rightReps} onChange={handleField}/>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!isCardio && !isRotary && (
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {entry.sets.map((s,i) => (
+            <div key={i} style={{...S.surf,padding:16}}>
+              <span style={{...S.eyebrow}}>Set {i+1}</span>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <NumField label="Weight" fkey={`${i}-weight`} value={s.weight} onChange={handleField} suffix="lb" carried={s.carried&&!s.touched}/>
+                <NumField label="Reps"   fkey={`${i}-reps`}   value={s.reps}   onChange={handleField}/>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Effort rating */}
+      <div style={{...S.surf,padding:16,marginTop:22}}>
+        <span style={S.eyebrow}>How did it feel?</span>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:4}}>
+          {[
+            {key:"easy",     label:"😌 Easy",     bg:"#2A3D2E", border:"#4A8C7C", text:"#7AC4A8"},
+            {key:"good",     label:"💪 Good",     bg:"#2D2A1A", border:"#D9A441", text:"#D9A441"},
+            {key:"too_hard", label:"🔥 Too Hard", bg:"#3D2020", border:"#B2593F", text:"#E07050"},
+          ].map(r => (
+            <button key={r.key} onClick={()=>setEntry(e=>({...e, rating: e.rating===r.key ? null : r.key}))}
+              style={{
+                background:  entry.rating===r.key ? r.bg : "transparent",
+                border:      `1px solid ${entry.rating===r.key ? r.border : "#3A362F"}`,
+                color:       entry.rating===r.key ? r.text : "#8A8478",
+                borderRadius:6, padding:"10px 4px", fontSize:12, fontFamily:"inherit",
+                cursor:"pointer", textAlign:"center", transition:"all 0.15s",
+                fontWeight:  entry.rating===r.key ? 600 : 400,
+              }}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <button style={{...S.btn,marginTop:14}} onClick={save}>
+        <Check size={18}/> Save &amp; Continue
+      </button>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════
+   MANAGE SCREEN
+════════════════════════════════════════ */
+function ManageScreen({ acts, onBack, onAdd, onDelete }) {
+  const [form, setForm] = useState({ name:"", cat:"Arm & Shoulder", type:"strength" });
+  function add() {
+    const nm = form.name.trim();
+    if (!nm) return;
+    if (acts.some(a => a.name.toLowerCase()===nm.toLowerCase())) return;
+    onAdd({ name:nm, cat:form.cat, type:form.type });
+    setForm(f => ({...f, name:""}));
+  }
+  return (
+    <div style={S.page}>
+      <button style={{...S.back,marginBottom:18}} onClick={onBack}><ArrowLeft size={16}/> Home</button>
+      <h2 style={{fontSize:20,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",...S.text,marginBottom:4}}>Activities</h2>
+      <p style={{fontSize:14,marginBottom:20,...S.muted}}>Add or remove workout activities.</p>
+
+      <div style={{...S.surf,padding:16,marginBottom:16}}>
+        <span style={S.eyebrow}>Add New</span>
+        <div style={{display:"flex",flexDirection:"column",gap:10,marginTop:4}}>
+          <label><span style={S.eyebrow}>Name</span>
+            <input style={S.ti} value={form.name} placeholder="e.g. Cable Fly"
+              onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
+          </label>
+          <label><span style={S.eyebrow}>Category</span>
+            <select style={S.si} value={form.cat} onChange={e=>setForm(f=>({...f,cat:e.target.value}))}>
+              {CATS.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <label><span style={S.eyebrow}>Type</span>
+            <select style={S.si} value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>
+              {Object.entries(TYPES).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+            </select>
+          </label>
+          <button style={{...S.btn,marginTop:4}} onClick={add}><Plus size={15}/> Add Activity</button>
+        </div>
+      </div>
+
+      <div style={{...S.surf,padding:16}}>
+        <span style={S.eyebrow}>All Activities ({acts.length})</span>
+        {acts.map(a => (
+          <div key={a.name} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 0",borderBottom:"1px solid #2E2C28"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <Dot cat={a.cat} size={9}/>
+              <div>
+                <div style={{fontSize:14,...S.text}}>{a.name}</div>
+                <div style={S.eyeSm}>{a.cat}</div>
+              </div>
+            </div>
+            <button style={S.btnDel} onClick={()=>onDelete(a.name)}><Trash2 size={14}/></button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════
+   GRAPH SCREEN
+════════════════════════════════════════ */
+function GraphScreen({ weightLog, onBack }) {
+  const [range, setRange] = useState("month");
+  const rangeDays = { week:7, month:30, "3m":90, "6m":180, year:365 };
+
+  const chartData = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - rangeDays[range]);
+    const cs = cutoff.toISOString().slice(0,10);
+    return weightLog.filter(d => d.date >= cs).map(d => ({ date:fmtDate(d.date), weight:d.weight }));
+  }, [weightLog, range]);
+
+  const recent = [...weightLog].reverse().slice(0,10);
+
+  return (
+    <div style={S.page}>
+      <button style={{...S.back,marginBottom:18}} onClick={onBack}><ArrowLeft size={16}/> Home</button>
+      <h2 style={{fontSize:20,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",...S.text,marginBottom:4}}>Body Weight</h2>
+      <p style={{fontSize:14,marginBottom:16,...S.muted}}>Auto-logged when you update weight on the home screen.</p>
+
+      <div style={{...S.surf,padding:16,marginBottom:14}}>
+        {/* range selector */}
+        <div style={{display:"flex",gap:6,marginBottom:16}}>
+          {["week","month","3m","6m","year"].map(r => (
+            <button key={r} style={{...S.rngBtn,...(range===r?S.rngBtnOn:{})}} onClick={()=>setRange(r)}>
+              {{week:"Week",month:"Month","3m":"3M","6m":"6M",year:"Year"}[r]}
+            </button>
+          ))}
+        </div>
+
+        {chartData.length < 2
+          ? <p style={{fontSize:14,textAlign:"center",padding:"40px 0",...S.muted}}>
+              {chartData.length===0 ? "No data in this range. Update your weight on the home screen to track it." : `${chartData[0].weight} lb on ${chartData[0].date}`}
+            </p>
+          : <ResponsiveContainer width="100%" height={160}>
+              <LineChart data={chartData} margin={{top:10,right:10,left:-20,bottom:0}}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#2A2825"/>
+                <XAxis dataKey="date" tick={{fontSize:9,fill:"#6E695E"}} tickLine={false} axisLine={false}
+                  interval={Math.max(0,Math.floor(chartData.length/3)-1)}/>
+                <YAxis tick={{fontSize:9,fill:"#6E695E"}} tickLine={false} axisLine={false}
+                  domain={["auto","auto"]}/>
+                <Tooltip contentStyle={{background:"#211F1B",border:"1px solid #3A362F",borderRadius:6,fontSize:12,color:"#F2EFE9"}}/>
+                <Line type="monotone" dataKey="weight" stroke="#D9A441" strokeWidth={2} dot={{fill:"#D9A441",r:3}} activeDot={{r:5}}/>
+              </LineChart>
+            </ResponsiveContainer>
+        }
+      </div>
+
+      {recent.length > 0 && (
+        <div style={{...S.surf,padding:16}}>
+          <span style={S.eyebrow}>Recent Entries</span>
+          {recent.map((d,i) => (
+            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid #2E2C28"}}>
+              <span style={{fontSize:14,...S.text}}>{fmtDate(d.date)}</span>
+              <span style={{fontSize:16,fontFamily:"'Courier New',Courier,monospace",...S.text}}>{d.weight} lb</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════
+   ROOT
+════════════════════════════════════════ */
+/* ════════════════════════════════════════
+   HISTORY SCREEN
+════════════════════════════════════════ */
+const RATING_LABEL = { easy:"😌 Easy", good:"💪 Good", too_hard:"🔥 Too Hard" };
+const RATING_COLOR = { easy:"#7AC4A8", good:"#D9A441", too_hard:"#E07050" };
+
+function HistoryScreen({ log, onBack, onDeleteEntry, onDeleteDay }) {
+  const [expanded, setExpanded] = useState({});
+
+  // Group log entries by date, most recent first
+  const byDay = useMemo(() => {
+    const days = {};
+    log.forEach(e => { if (!days[e.date]) days[e.date] = []; days[e.date].push(e); });
+    return Object.entries(days).sort((a,b) => b[0].localeCompare(a[0]));
+  }, [log]);
+
+  function toggle(date) {
+    setExpanded(prev => ({...prev, [date]: !prev[date]}));
+  }
+
+  function dayTotal(entries) {
+    return entries.filter(e => e.sets).reduce((sum,e) =>
+      sum + e.sets.reduce((a,s) => a + nv(s.weight)*(nv(s.reps)||nv(s.leftReps)+nv(s.rightReps)), 0), 0);
+  }
+
+  function entryDetail(e) {
+    if (e.type === "cardio") {
+      const parts = [];
+      if (e.incline) parts.push(`Incline ${e.incline}%`);
+      if (e.speed)   parts.push(`Speed ${e.speed} mph`);
+      if (e.time)    parts.push(`${e.time} min`);
+      return parts.join(" · ") || "—";
+    }
+    if (!e.sets) return "—";
+    return e.sets.map((s,i) => {
+      const w  = nv(s.weight);
+      const lr = s.leftReps  != null && s.leftReps  !== "" ? `L${nv(s.leftReps)} R${nv(s.rightReps)}` : null;
+      const r  = lr || (nv(s.reps) > 0 ? `${nv(s.reps)} reps` : null);
+      if (!w && !r) return null;
+      return `Set ${i+1}: ${w ? w+"lb" : "—"}${r ? " × "+r : ""}`;
+    }).filter(Boolean).join("  |  ") || "—";
+  }
+
+  if (byDay.length === 0) return (
+    <div style={S.page}>
+      <button style={{...S.back,marginBottom:24}} onClick={onBack}><ArrowLeft size={16}/> Home</button>
+      <h2 style={{fontSize:20,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",...S.text,marginBottom:4}}>History</h2>
+      <div style={{...S.surf,padding:24,textAlign:"center",marginTop:20}}>
+        <p style={{...S.muted,fontSize:14}}>No workouts logged yet. Complete your first session to see history here.</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={S.page}>
+      <button style={{...S.back,marginBottom:18}} onClick={onBack}><ArrowLeft size={16}/> Home</button>
+      <h2 style={{fontSize:20,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",...S.text,marginBottom:4}}>History</h2>
+      <p style={{fontSize:14,marginBottom:20,...S.muted}}>{byDay.length} workout {byDay.length===1?"day":"days"} logged.</p>
+
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {byDay.map(([date, entries]) => {
+          const isOpen = !!expanded[date];
+          const total  = dayTotal(entries);
+          const isToday = date === todayStr();
+
+          return (
+            <div key={date} style={{...S.surf,overflow:"hidden"}}>
+
+              {/* Day header row — tap to expand */}
+              <button onClick={()=>toggle(date)}
+                style={{width:"100%",background:"transparent",border:"none",cursor:"pointer",padding:"14px 16px",
+                        display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                <div style={{textAlign:"left"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:15,fontWeight:600,...S.text}}>
+                      {isToday ? "Today" : fmtDate(date)}
+                    </span>
+                    {isToday && <span style={{fontSize:10,letterSpacing:"0.1em",textTransform:"uppercase",color:"#D9A441",border:"1px solid #D9A441",borderRadius:9999,padding:"2px 6px"}}>Today</span>}
+                  </div>
+                  <div style={{fontSize:12,marginTop:2,...S.muted}}>
+                    {entries.length} {entries.length===1?"activity":"activities"}
+                    {total > 0 ? ` · ${Math.round(total).toLocaleString()} lb` : ""}
+                  </div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  {/* delete whole day */}
+                  <span onClick={ev=>{ev.stopPropagation(); if(window.confirm(`Delete all ${entries.length} activities on ${isToday?"today":fmtDate(date)}?`)) onDeleteDay(date);}}
+                    style={{color:"#6B2E28",cursor:"pointer",display:"flex",alignItems:"center"}}>
+                    <Trash2 size={15}/>
+                  </span>
+                  <span style={S.muted}>{isOpen ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}</span>
+                </div>
+              </button>
+
+              {/* Expanded activity list */}
+              {isOpen && (
+                <div style={{borderTop:"1px solid #2E2C28"}}>
+                  {entries.map(e => (
+                    <div key={e.id} style={{padding:"12px 16px",borderBottom:"1px solid #2A2825",display:"flex",alignItems:"flex-start",gap:10}}>
+                      <Dot cat={e.cat} size={9} style={{marginTop:4,flexShrink:0}}/>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                          <span style={{fontSize:14,fontWeight:600,...S.text}}>{e.name}</span>
+                          {e.rating && (
+                            <span style={{fontSize:10,color:RATING_COLOR[e.rating],border:`1px solid ${RATING_COLOR[e.rating]}`,borderRadius:9999,padding:"1px 6px",whiteSpace:"nowrap"}}>
+                              {RATING_LABEL[e.rating]}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{fontSize:12,marginTop:3,color:"#8A8478",lineHeight:1.5,wordBreak:"break-word"}}>
+                          {entryDetail(e)}
+                        </div>
+                      </div>
+                      <button onClick={()=>{ if(window.confirm(`Delete ${e.name}?`)) onDeleteEntry(e.id); }}
+                        style={{background:"transparent",border:"none",cursor:"pointer",color:"#6B2E28",padding:0,flexShrink:0}}>
+                        <Trash2 size={14}/>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default function WorkoutTracker() {
+  const [ready,      setReady]      = useState(false);
+  const [screen,     setScreen]     = useState("home");
+  const [profile,    setProfile]    = useState({ name:"", heightIn:"", weightLb:"" });
+  const [log,        setLog]        = useState([]);
+  const [weightLog,  setWeightLog]  = useState([]);
+  const [acts,       setActs]       = useState(BUILT_IN);
+  const [activeAct,  setActiveAct]  = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      const p  = await sGet("il_p");
+      const l  = await sGet("il_l");
+      const wl = await sGet("il_wl");
+      const a  = await sGet("il_acts");
+      if (p)  setProfile(p);
+      if (l)  setLog(l);
+      if (wl) setWeightLog(wl);
+      setActs(a || BUILT_IN);
+      setReady(true);
+    })();
+  }, []);
+
+  const ptmr = useRef(null);
+  const handleProfile = useCallback(next => {
+    setProfile(next);
+    clearTimeout(ptmr.current);
+    ptmr.current = setTimeout(async () => {
+      await sSet("il_p", next);
+      const w = nv(next.weightLb);
+      if (!w) return;
+      const today = todayStr();
+      setWeightLog(prev => {
+        const idx = prev.findIndex(d => d.date === today);
+        const updated = idx >= 0
+          ? prev.map((d,i) => i===idx ? {...d, weight:w} : d)
+          : [...prev, {date:today, weight:w}].sort((a,b) => a.date.localeCompare(b.date));
+        sSet("il_wl", updated);
+        return updated;
+      });
+    }, 700);
+  }, []);
+
+  const handleSave = useCallback(async rec => {
+    setLog(prev => { const n = [...prev, rec]; sSet("il_l", n); return n; });
+    setActiveAct(null);
+    setScreen("list");
+  }, []);
+
+  const handleAddAct  = useCallback(act  => { setActs(prev => { const n=[...prev,act];           sSet("il_acts",n); return n; }); }, []);
+  const handleDelAct  = useCallback(name => { setActs(prev => { const n=prev.filter(a=>a.name!==name); sSet("il_acts",n); return n; }); }, []);
+  const lastEntryFor  = useCallback(name => [...log].filter(e=>e.name===name).sort((a,b)=>b.id-a.id)[0]||null, [log]);
+
+  const handleDeleteEntry = useCallback(id => {
+    setLog(prev => { const n = prev.filter(e => e.id !== id); sSet("il_l", n); return n; });
+  }, []);
+
+  const handleDeleteDay = useCallback(date => {
+    setLog(prev => { const n = prev.filter(e => e.date !== date); sSet("il_l", n); return n; });
+  }, []);
+
+  if (!ready) return (
+    <div style={{background:"#1C1B1A",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:"#8A8478",fontSize:14}}>
+      Loading…
+    </div>
+  );
+
+  return (
+    <div style={{background:"#1C1B1A",color:"#F2EFE9",minHeight:"100vh",fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"}}>
+      {screen==="home" &&
+        <HomeScreen profile={profile} onProfile={handleProfile} log={log} weightLog={weightLog} acts={acts} onGo={s=>setScreen(s)}/>}
+      {screen==="list" &&
+        <ListScreen acts={acts} log={log} onHome={()=>setScreen("home")} onPick={a=>{setActiveAct(a);setScreen("activity");}}/>}
+      {screen==="activity" && activeAct &&
+        <ActivityScreen activity={activeAct} lastEntry={lastEntryFor(activeAct.name)}
+          onBack={()=>{setActiveAct(null);setScreen("list");}}
+          onHome={()=>{setActiveAct(null);setScreen("home");}}
+          onSave={handleSave}/>}
+      {screen==="manage" &&
+        <ManageScreen acts={acts} onBack={()=>setScreen("home")} onAdd={handleAddAct} onDelete={handleDelAct}/>}
+      {screen==="graph" &&
+        <GraphScreen weightLog={weightLog} onBack={()=>setScreen("home")}/>}
+      {screen==="history" &&
+        <HistoryScreen log={log} onBack={()=>setScreen("home")} onDeleteEntry={handleDeleteEntry} onDeleteDay={handleDeleteDay}/>}
+    </div>
+  );
+}
