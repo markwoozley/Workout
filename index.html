@@ -179,6 +179,50 @@ function numField(label,fkey,value,suffix,carried){
     '</div></label>';
 }
 
+
+function workoutCalendar(){
+  var logByDate={};
+  S.log.forEach(function(e){if(!logByDate[e.date])logByDate[e.date]=[];logByDate[e.date].push(e);});
+  var now=new Date();var todaySt=today();
+  var dow=now.getDay();
+  var start=new Date(now);start.setDate(start.getDate()-dow-21);
+  var startStr=start.getFullYear()+'-'+pad(start.getMonth()+1)+'-'+pad(start.getDate());
+  var dayLabels=['S','M','T','W','T','F','S'].map(function(d){
+    return'<span style="text-align:center;font-size:10px;color:#555048;display:block;font-weight:600;">'+d+'</span>';}).join('');
+  var blocks='';
+  for(var i=0;i<28;i++){
+    var d=new Date(start);d.setDate(d.getDate()+i);
+    var ds=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+    var isToday=ds===todaySt;var isFuture=ds>todaySt;
+    var entries=logByDate[ds]||[];var cnt=entries.length;
+    var bg,ring;
+    if(isFuture){bg='#1C1B1A';ring='opacity:0.2;';}
+    else if(cnt===0){bg=isToday?'#2E2C28':'#242220';ring=isToday?'outline:2px solid #D9A441;outline-offset:-2px;':'';
+    }else{
+      bg=cnt<=2?'#1F4A38':cnt<=5?'#2D6B52':'#3D8C6A';
+      ring=isToday?'outline:2px solid #7AC4A8;outline-offset:-2px;':'';
+    }
+    var tip=fmtDate(ds)+(cnt?' ('+cnt+' '+(cnt===1?'activity':'activities')+')':'');
+    blocks+='<div title="'+tip+'" style="aspect-ratio:1/1;background:'+bg+';border-radius:3px;'+ring+'"></div>';
+  }
+  var streak=0,chk=new Date(now);
+  for(var si=0;si<365;si++){
+    var ds2=chk.getFullYear()+'-'+pad(chk.getMonth()+1)+'-'+pad(chk.getDate());
+    if(logByDate[ds2]&&logByDate[ds2].length){streak++;chk.setDate(chk.getDate()-1);}
+    else if(ds2===todaySt){chk.setDate(chk.getDate()-1);}
+    else break;
+  }
+  var sessions=0;
+  for(var k in logByDate){if(k>=startStr)sessions++;}
+  var streakTxt=streak>0?'\u{1F525} '+streak+' day streak':'No active streak';
+  return'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px;">'+dayLabels+'</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">'+blocks+'</div>'+
+    '<div style="display:flex;justify-content:space-between;margin-top:10px;">'+
+      '<span style="font-size:12px;color:#8A8478;">'+streakTxt+'</span>'+
+      '<span style="font-size:12px;color:#8A8478;">'+sessions+' sessions / 4 wks</span>'+
+    '</div>';
+}
+
 function render(){
   var r=document.getElementById('root');
   if(S.screen==='home')         r.innerHTML=renderHome();
@@ -191,15 +235,12 @@ function render(){
 
 function renderHome(){
   var p=S.profile;var b=bmi(nv(p.heightIn),nv(p.weightLb));
-  var l6=last6();var l6t=l6.reduce(function(a,x){return a+x[1];},0);
   var done=doneNames();var dc=Object.keys(done).length;var ord=buildOrder();
   var bmiHtml='';
   if(b){bmiHtml='<div class="divtop" style="display:flex;align-items:center;justify-content:space-between;">'+
     '<div><span class="eyebrow">BMI</span><div class="mono" style="font-size:24px;color:#F2EFE9;">'+b.toFixed(1)+'</div></div>'+
     '<span class="tag">'+bmiLbl(b)+'</span></div>';}
-  var l6Html='<p class="muted" style="font-size:14px;margin-top:8px;">No workouts logged yet.</p>';
-  if(l6.length){l6Html='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">'+
-    l6.map(function(x){return'<div class="chip"><div class="eyebrow-sm">'+fmtDate(x[0])+'</div><div class="mono" style="font-size:13px;color:#F2EFE9;">'+Math.round(x[1]).toLocaleString()+'</div></div>';}).join('')+'</div>';}
+  var l6Html=workoutCalendar();
   var wBtn=dc>0
     ?'<div class="resume-bar"><div><div class="eyebrow" style="margin-bottom:2px;">Today\'s Progress</div>'+
       '<div style="font-size:14px;font-weight:600;color:#F2EFE9;">'+dc+' of '+ord.length+' done</div></div>'+
@@ -222,9 +263,8 @@ function renderHome(){
           '<span class="muted mono" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:12px;">lb</span></div></label>'+
         '</div></div>'+
       '<div id="bmi-slot">'+bmiHtml+'</div></div>'+
-    '<div class="surf" style="padding:16px;margin-bottom:14px;">'+
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><span class="muted">'+IC.flame+'</span><span class="eyebrow" style="display:inline;margin:0;">Last 6 Workouts</span></div>'+
-      '<div class="mono" style="font-size:26px;margin-bottom:2px;color:#F2EFE9;">'+Math.round(l6t).toLocaleString()+' <span class="muted" style="font-size:14px;font-family:inherit;">lb lifted</span></div>'+
+    '<div class="surf" style="padding:14px 16px;margin-bottom:14px;">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><span class="muted">'+IC.flame+'</span><span class="eyebrow" style="display:inline;margin:0;">Workout Activity</span></div>'+
       l6Html+'</div>'+
     wBtn+
     '<div style="display:flex;gap:8px;margin-top:10px;">'+
