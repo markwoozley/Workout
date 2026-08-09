@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="apple-mobile-web-app-title" content="Iron Log"/>
-<title>Iron Log</title>
+<meta name="apple-mobile-web-app-title" content="The Gym"/>
+<title>The Gym&trade;</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;background:#1C1B1A;color:#F2EFE9;}
@@ -202,8 +202,11 @@ function workoutCalendar(){
       bg=cnt<=2?'#1F4A38':cnt<=5?'#2D6B52':'#3D8C6A';
       ring=isToday?'outline:2px solid #7AC4A8;outline-offset:-2px;':'';
     }
+    var dayNum=d.getDate();
     var tip=fmtDate(ds)+(cnt?' ('+cnt+' '+(cnt===1?'activity':'activities')+')':'');
-    blocks+='<div title="'+tip+'" style="aspect-ratio:1/1;background:'+bg+';border-radius:3px;'+ring+'"></div>';
+    var txtColor=isFuture?'#2E2C28':cnt>0?'rgba(255,255,255,0.85)':isToday?'#8A8070':'#3D3830';
+    blocks+='<div title="'+tip+'" style="aspect-ratio:1/1;background:'+bg+';border-radius:3px;'+ring+';display:flex;align-items:center;justify-content:center;">'+
+      '<span style="font-size:9px;font-weight:700;color:'+txtColor+';line-height:1;font-family:inherit;">'+dayNum+'</span></div>';
   }
   var streak=0,chk=new Date(now);
   for(var si=0;si<365;si++){
@@ -248,8 +251,8 @@ function renderHome(){
     :'<button class="btn" data-action="start" style="margin-bottom:12px;">Start Today\'s Workout '+IC.chev+'</button>';
   return'<div class="page">'+
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><span class="accent">'+IC.db+'</span>'+
-    '<h1 class="display" style="font-size:24px;color:#F2EFE9;">Iron Log</h1></div>'+
-    '<p class="muted" style="font-size:14px;margin-bottom:24px;">Your workout, tracked set by set.</p>'+
+    '<h1 class="display" style="font-size:24px;color:#F2EFE9;">The Gym<sup style="font-size:13px;vertical-align:super;">&trade;</sup></h1></div>'+
+    '<p class="muted" style="font-size:14px;margin-bottom:24px;">Lifeone gym &middot; Frederick</p>'+
     '<div class="surf" style="padding:16px;margin-bottom:14px;">'+
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;"><span class="muted">'+IC.user+'</span><span class="eyebrow" style="display:inline;margin:0;">Profile</span></div>'+
       '<div style="display:flex;flex-direction:column;gap:10px;">'+
