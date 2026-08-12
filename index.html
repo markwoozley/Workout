@@ -173,14 +173,15 @@ var EASY='😌 Easy',GOOD='💪 Good',HARD='🔥 Too Hard';
 var RATINGS=[{key:'easy',label:EASY,cls:'easy-on'},{key:'good',label:GOOD,cls:'good-on'},{key:'too_hard',label:HARD,cls:'hard-on'}];
 var RATING_COLOR={easy:'#7AC4A8',good:'#D9A441',too_hard:'#E07050'};
 var RATING_LABEL={easy:EASY,good:GOOD,too_hard:HARD};
-var S={screen:'home',profile:{name:'',heightIn:'',weightLb:''},log:[],weightLog:[],acts:[],notes:{},act:null,entry:null,graphRange:'month',expanded:{},workoutDate:''};
-function blankEntry(){return{incline:'',speed:'',time:'',rating:null,incCarried:false,spdCarried:false,incTouched:false,spdTouched:false,sets:[0,1,2].map(function(){return{weight:'',reps:'',leftReps:'',rightReps:'',carried:false,touched:false};})}}
+var S={screen:'home',profile:{name:'',heightIn:'',weightLb:''},log:[],weightLog:[],acts:[],notes:{},act:null,entry:null,graphRange:'month',expanded:{},workoutDate:'',unit:'lb'};
+function blankEntry(){return{incline:'',speed:'',time:'',rating:null,note:'',incCarried:false,spdCarried:false,incTouched:false,spdTouched:false,sets:[0,1,2].map(function(){return{weight:'',reps:'',leftReps:'',rightReps:'',carried:false,touched:false};})}}
 function load(){
   try{var p=localStorage.getItem('il_p');if(p)S.profile=JSON.parse(p);}catch(e){}
   try{var l=localStorage.getItem('il_l');if(l)S.log=JSON.parse(l);}catch(e){}
   try{var w=localStorage.getItem('il_wl');if(w)S.weightLog=JSON.parse(w);}catch(e){}
   try{var a=localStorage.getItem('il_acts');S.acts=a?JSON.parse(a):BUILT_IN.slice();}catch(e){S.acts=BUILT_IN.slice();}
   try{var n=localStorage.getItem('il_notes');if(n)S.notes=JSON.parse(n);}catch(e){}
+  try{var u=localStorage.getItem('il_unit');if(u)S.unit=u;}catch(e){}
 }
 var _pt=null;
 function saveProfile(){clearTimeout(_pt);_pt=setTimeout(function(){try{localStorage.setItem('il_p',JSON.stringify(S.profile));}catch(e){}},600);}
@@ -239,9 +240,11 @@ var IC={
 function numField(label,fkey,value,suffix,carried){
   var cs=carried?'<span style="color:#E5493D;text-transform:none;margin-left:6px;">&middot; carried over</span>':'';
   var pr=suffix?'padding-right:40px;':'';var st=carried?'color:#E5493D;border-color:#6B2E28;':'';
+  var isWt=fkey&&fkey.indexOf('weight')>=0;
+  var sfxStyle='position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:12px;color:#8A8478;font-family:\'Courier New\',Courier,monospace;'+(isWt?'cursor:pointer;border-bottom:1px dotted #6E695E;':'');
   return'<label style="display:block;"><span class="eyebrow">'+label+cs+'</span><div style="position:relative;">'+
     '<input type="number" inputmode="decimal" class="ni'+(carried?' carried':'')+'" data-field="'+fkey+'" value="'+esc(String(value||''))+'" placeholder="0" style="'+st+pr+'"/>'+
-    (suffix?'<span class="muted mono" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:12px;">'+suffix+'</span>':'')+
+    (suffix?'<span '+(isWt?'data-unit-sfx="1"':'')+' style="'+sfxStyle+'">'+suffix+'</span>':'')+
     '</div></label>';
 }
 function workoutCalendar(){
@@ -365,14 +368,16 @@ function renderActivity(){
   var dateTag=isToday?'':'<span style="font-size:11px;color:#B2593F;border:1px solid #B2593F;border-radius:9999px;padding:1px 6px;margin-left:8px;">'+fmtDate(wd)+'</span>';
   var fields='';
   if(isC){fields='<div class="surf" style="padding:16px;display:flex;flex-direction:column;gap:14px;">'+numField('Incline','incline',e.incline,'%',e.incCarried&&!e.incTouched)+numField('Speed','speed',e.speed,'mph',e.spdCarried&&!e.spdTouched)+numField('Time','time',e.time,'min',false)+'</div>';}
-  else if(isR){fields='<div style="display:flex;flex-direction:column;gap:12px;">'+e.sets.map(function(s,i){return'<div class="surf" style="padding:16px;"><span class="eyebrow">Set '+(i+1)+'</span>'+numField('Weight','set-'+i+'-weight',s.weight,'lb',s.carried&&!s.touched)+'<div class="grid2" style="margin-top:10px;">'+numField('Left Reps','set-'+i+'-leftReps',s.leftReps,'',false)+numField('Right Reps','set-'+i+'-rightReps',s.rightReps,'',false)+'</div></div>';}).join('')+'</div>';}
-  else{fields='<div style="display:flex;flex-direction:column;gap:12px;">'+e.sets.map(function(s,i){return'<div class="surf" style="padding:16px;"><span class="eyebrow">Set '+(i+1)+'</span><div class="grid2">'+numField('Weight','set-'+i+'-weight',s.weight,'lb',s.carried&&!s.touched)+numField('Reps','set-'+i+'-reps',s.reps,'',false)+'</div></div>';}).join('')+'</div>';}
+  else if(isR){fields='<div style="display:flex;flex-direction:column;gap:12px;">'+e.sets.map(function(s,i){return'<div class="surf" style="padding:16px;"><span class="eyebrow">Set '+(i+1)+'</span>'+numField('Weight','set-'+i+'-weight',s.weight,S.unit,s.carried&&!s.touched)+'<div class="grid2" style="margin-top:10px;">'+numField('Left Reps','set-'+i+'-leftReps',s.leftReps,'',false)+numField('Right Reps','set-'+i+'-rightReps',s.rightReps,'',false)+'</div></div>';}).join('')+'</div>';}
+  else{fields='<div style="display:flex;flex-direction:column;gap:12px;">'+e.sets.map(function(s,i){return'<div class="surf" style="padding:16px;"><span class="eyebrow">Set '+(i+1)+'</span><div class="grid2">'+numField('Weight','set-'+i+'-weight',s.weight,S.unit,s.carried&&!s.touched)+numField('Reps','set-'+i+'-reps',s.reps,'',false)+'</div></div>';}).join('')+'</div>';}
   var rBtns=RATINGS.map(function(r){return'<button class="rating-btn'+(e.rating===r.key?' '+r.cls:'')+'" data-action="rate" data-rating="'+r.key+'">'+r.label+'</button>';}).join('');
   return'<div class="page">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><button class="back" data-action="list">'+IC.back+' Activities</button><button class="back" data-action="home" style="text-decoration:underline;text-underline-offset:3px;">Summary</button></div>'+
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><span class="dot" style="width:11px;height:11px;background:'+CAT_COLOR[a.cat]+';"></span><span class="eyebrow" style="display:inline;margin:0;">'+esc(a.cat)+'</span>'+dateTag+'</div>'+
     '<h2 class="display" style="font-size:22px;color:#F2EFE9;margin-bottom:22px;">'+esc(a.name)+'</h2>'+fields+
     '<div class="surf" style="padding:16px;margin-top:18px;"><span class="eyebrow">How did it feel?</span><div class="grid3" style="margin-top:4px;">'+rBtns+'</div></div>'+
+    '<div class="surf" style="padding:14px 16px;margin-top:10px;"><span class="eyebrow">Activity Notes</span>'+
+    '<textarea class="ta" data-field="act-note" placeholder="Any notes about this exercise...">'+esc(S.entry.note||'')+'</textarea></div>'+
     '<button class="btn" data-action="save" style="margin-top:14px;">'+IC.check+' Save &amp; Continue</button></div>';
 }
 function renderManage(){
@@ -419,7 +424,7 @@ function renderHistory(){
     var noteHtml='';
     if(isOpen&&S.notes[date]){noteHtml='<div style="padding:10px 16px;border-bottom:1px solid #2A2825;display:flex;gap:8px;align-items:flex-start;"><span style="font-size:11px;color:#8A8478;text-transform:uppercase;letter-spacing:.1em;padding-top:2px;flex-shrink:0;min-width:36px;">Note</span><span style="font-size:13px;color:#C8C0B8;line-height:1.5;font-style:italic;">'+esc(S.notes[date])+'</span></div>';}
     var actRows='';
-    if(isOpen){actRows=entries.map(function(e){var rTag=e.rating?'<span style="font-size:10px;color:'+RATING_COLOR[e.rating]+';border:1px solid '+RATING_COLOR[e.rating]+';border-radius:9999px;padding:1px 6px;white-space:nowrap;">'+RATING_LABEL[e.rating]+'</span>':'';return'<div class="act-row"><span class="dot" style="width:9px;height:9px;background:'+CAT_COLOR[e.cat]+';margin-top:3px;flex-shrink:0;"></span><div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-size:14px;font-weight:600;color:#F2EFE9;">'+esc(e.name)+'</span>'+rTag+'</div><div style="font-size:12px;margin-top:3px;color:#8A8478;line-height:1.5;">'+entryDetail(e)+'</div></div><button class="btn-del" data-action="del-entry" data-id="'+e.id+'">'+IC.trash+'</button></div>';}).join('');}
+    if(isOpen){actRows=entries.map(function(e){var rTag=e.rating?'<span style="font-size:10px;color:'+RATING_COLOR[e.rating]+';border:1px solid '+RATING_COLOR[e.rating]+';border-radius:9999px;padding:1px 6px;white-space:nowrap;">'+RATING_LABEL[e.rating]+'</span>':'';return'<div class="act-row"><span class="dot" style="width:9px;height:9px;background:'+CAT_COLOR[e.cat]+';margin-top:3px;flex-shrink:0;"></span><div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-size:14px;font-weight:600;color:#F2EFE9;">'+esc(e.name)+'</span>'+rTag+'</div><div style="font-size:12px;margin-top:3px;color:#8A8478;line-height:1.5;">'+entryDetail(e)+'</div>'+(e.note?'<div style="font-size:12px;margin-top:4px;color:#C8C0B8;font-style:italic;line-height:1.4;">&ldquo;'+esc(e.note)+'&rdquo;</div>':'')+'</div><button class="btn-del" data-action="del-entry" data-id="'+e.id+'">'+IC.trash+'</button></div>';}).join('');}
     return'<div class="surf" style="overflow:hidden;margin-bottom:10px;"><button class="day-hdr" data-action="toggle-day" data-date="'+date+'"><div style="text-align:left;"><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:15px;font-weight:600;color:#F2EFE9;">'+(isToday?'Today':fmtDate(date))+'</span>'+todayBadge+'</div><div style="font-size:12px;margin-top:2px;color:#8A8478;">'+entries.length+' '+(entries.length===1?'activity':'activities')+(dayWt>0?' &middot; '+Math.round(dayWt).toLocaleString()+' lb':'')+'</div></div><div style="display:flex;align-items:center;gap:10px;"><span data-action="del-day" data-date="'+date+'" style="color:#6B2E28;cursor:pointer;display:flex;align-items:center;padding:4px;">'+IC.trash+'</span><span class="muted">'+(isOpen?IC.chevU:IC.chevD)+'</span></div></button>'+(isOpen?'<div style="border-top:1px solid #2E2C28;">'+noteHtml+actRows+'</div>':'')+'</div>';
   }).join('');
   return'<div class="page"><button class="back" data-action="home" style="margin-bottom:18px;">'+IC.back+' Home</button><h2 class="display" style="font-size:20px;color:#F2EFE9;margin-bottom:4px;">History</h2><p class="muted" style="font-size:14px;margin-bottom:16px;">'+byDay.length+' workout '+(byDay.length===1?'day':'days')+' logged.</p>'+volChart+list+'</div>';
@@ -449,7 +454,7 @@ document.addEventListener('click',function(e){
   else if(act==='rate'){var r=el.dataset.rating;S.entry.rating=(S.entry.rating===r?null:r);render();}
   else if(act==='save'){
     var a2=S.act;var en=S.entry;var saveDate=S.workoutDate||today();
-    var rec={id:Date.now(),date:saveDate,name:a2.name,cat:a2.cat,type:a2.type,rating:en.rating};
+    var rec={id:Date.now(),date:saveDate,name:a2.name,cat:a2.cat,type:a2.type,rating:en.rating,note:en.note||''};
     if(a2.type==='cardio'){rec.incline=en.incline;rec.speed=en.speed;rec.time=en.time;}
     else{rec.sets=en.sets.map(function(s){return{weight:s.weight,reps:s.reps,leftReps:s.leftReps,rightReps:s.rightReps};});}
     S.log.push(rec);saveLog();S.act=null;S.screen='list';render();
@@ -468,6 +473,7 @@ document.addEventListener('input',function(e){
   if(f==='add-cat'){S._addCat=v;return;}
   if(f==='add-type'){S._addType=v;return;}
   if(f==='day-note'){S.notes[S.workoutDate||today()]=v;saveNotes();return;}
+  if(f==='act-note'){if(S.entry)S.entry.note=v;return;}
   if(!S.entry)return;
   if(f==='incline'){S.entry.incline=v;if(S.entry.incCarried&&!S.entry.incTouched){S.entry.incTouched=true;cc(e.target);}return;}
   if(f==='speed'){S.entry.speed=v;if(S.entry.spdCarried&&!S.entry.spdTouched){S.entry.spdTouched=true;cc(e.target);}return;}
@@ -477,6 +483,60 @@ document.addEventListener('input',function(e){
 });
 document.addEventListener('change',function(e){var f=e.target.dataset.field;if(!f)return;if(f==='add-cat')S._addCat=e.target.value;else if(f==='add-type')S._addType=e.target.value;});
 function cc(el){el.classList.remove('carried');el.style.color='#F2EFE9';el.style.borderColor='#3A362F';}
+/* ── UNIT PICKER (long-press on any weight suffix) ── */
+var _lpt=null;
+function removeUnitPopup(){var p=document.getElementById('unit-pop');if(p)p.remove();}
+function showUnitPicker(target){
+  removeUnitPopup();
+  var pop=document.createElement('div');
+  pop.id='unit-pop';
+  pop.style.cssText='position:fixed;background:#211F1B;border:1px solid #D9A441;border-radius:10px;padding:6px;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,0.6);min-width:180px;';
+  var rect=target.getBoundingClientRect();
+  var top=rect.bottom+8;
+  if(top+120>window.innerHeight)top=rect.top-120;
+  pop.style.top=top+'px';
+  pop.style.left=Math.max(12,Math.min(rect.left-40,window.innerWidth-196))+'px';
+  var title=document.createElement('div');
+  title.style.cssText='font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#8A8478;padding:4px 10px 8px;';
+  title.textContent='Weight Unit';pop.appendChild(title);
+  ['lb','kg'].forEach(function(u){
+    var btn=document.createElement('button');
+    var active=S.unit===u;
+    btn.style.cssText='display:flex;align-items:center;gap:10px;width:100%;padding:11px 12px;background:'+(active?'#2D2A1A':'transparent')+';border:none;border-radius:6px;color:'+(active?'#D9A441':'#F2EFE9')+';font-size:15px;cursor:pointer;font-family:inherit;text-align:left;';
+    btn.innerHTML='<span style="font-size:18px;font-family:\'Courier New\',Courier,monospace;font-weight:700;min-width:28px;">'+u+'</span>'+
+      '<span>'+(u==='lb'?'Pounds':'Kilograms')+'</span>'+
+      (active?'<span style="margin-left:auto;color:#D9A441;font-size:16px;">&#10003;</span>':'');
+    btn.addEventListener('click',function(e){
+      e.stopPropagation();
+      S.unit=u;
+      try{localStorage.setItem('il_unit',u);}catch(ex){}
+      removeUnitPopup();render();
+    });
+    pop.appendChild(btn);
+  });
+  document.body.appendChild(pop);
+  setTimeout(function(){
+    function outside(e){if(!pop.contains(e.target)){removeUnitPopup();document.removeEventListener('click',outside);}}
+    document.addEventListener('click',outside);
+  },50);
+}
+document.addEventListener('touchstart',function(e){
+  var el=e.target.closest('[data-unit-sfx="1"]');if(!el)return;
+  e.preventDefault();
+  _lpt=setTimeout(function(){showUnitPicker(el);},500);
+},{passive:false});
+document.addEventListener('touchend',function(){clearTimeout(_lpt);});
+document.addEventListener('touchmove',function(){clearTimeout(_lpt);},{passive:true});
+/* also allow click on desktop / iPad for testing */
+document.addEventListener('click',function(e){
+  var el=e.target.closest('[data-unit-sfx="1"]');if(!el)return;
+  if(window._unitClickOK)showUnitPicker(el);
+});
+document.addEventListener('touchend',function(e){
+  var el=e.target.closest('[data-unit-sfx="1"]');
+  if(el){window._unitClickOK=true;setTimeout(function(){window._unitClickOK=false;},200);}
+});
+
 S._addCat='Arm & Shoulder';S._addType='strength';S._addName='';
 load();S.workoutDate=today();render();
 </script>
