@@ -197,7 +197,7 @@ function logWeight(w){
 }
 function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
 function pad(n){return n<10?'0'+n:''+n;}
-function addDays(ds,n){var d=new Date(ds);d.setDate(d.getDate()+n);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function addDays(ds,n){var p=ds.split('-').map(Number);var d=new Date(p[0],p[1]-1,p[2]);d.setDate(d.getDate()+n);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
 function fmtDate(s){var p=s.split('-').map(Number);return new Date(p[0],p[1]-1,p[2]).toLocaleDateString(undefined,{month:'short',day:'numeric'});}
 function fmtFull(s){var p=s.split('-').map(Number);return new Date(p[0],p[1]-1,p[2]).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});}
 function nv(v){var f=parseFloat(v);return isFinite(f)?f:0;}
@@ -298,12 +298,24 @@ function makeBarSVG(data){
 }
 function render(){
   var r=document.getElementById('root');
-  if(S.screen==='home')          r.innerHTML=renderHome();
-  else if(S.screen==='list')     r.innerHTML=renderList();
-  else if(S.screen==='activity') r.innerHTML=renderActivity();
-  else if(S.screen==='manage')   r.innerHTML=renderManage();
-  else if(S.screen==='graph')    r.innerHTML=renderGraph();
-  else if(S.screen==='history')  r.innerHTML=renderHistory();
+  try{
+    var html='';
+    if(S.screen==='home')          html=renderHome();
+    else if(S.screen==='list')     html=renderList();
+    else if(S.screen==='activity') html=renderActivity();
+    else if(S.screen==='manage')   html=renderManage();
+    else if(S.screen==='graph')    html=renderGraph();
+    else if(S.screen==='history')  html=renderHistory();
+    if(html) r.innerHTML=html;
+  }catch(err){
+    console.error('Render error:',err);
+    r.innerHTML='<div style="padding:40px 20px;text-align:center;">'+
+      '<div style="font-size:32px;margin-bottom:12px;">\u26A0\uFE0F</div>'+
+      '<div style="color:#F2EFE9;font-size:16px;font-weight:600;margin-bottom:8px;">Something went wrong</div>'+
+      '<div style="color:#8A8478;font-size:14px;margin-bottom:24px;">Your workout data is safe in storage.</div>'+
+      '<button onclick="S.screen=\'home\';render();" style="background:#D9A441;color:#1C1B1A;border:none;padding:12px 28px;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;">Go Home</button>'+
+      '</div>';
+  }
 }
 function renderHome(){
   var p=S.profile;var b=bmi(nv(p.heightIn),nv(p.weightLb));
@@ -363,6 +375,7 @@ function renderList(){
     '<textarea class="ta" data-field="day-note" placeholder="Any notes for this session...">'+esc(S.notes[wd]||'')+'</textarea></div></div>';
 }
 function renderActivity(){
+  if(!S.act||!S.entry){S.screen='list';return renderList();}
   var a=S.act;var e=S.entry;var isC=a.type==='cardio';var isR=a.type==='rotary';
   var wd=S.workoutDate||today();var isToday=(wd===today());
   var dateTag=isToday?'':'<span style="font-size:11px;color:#B2593F;border:1px solid #B2593F;border-radius:9999px;padding:1px 6px;margin-left:8px;">'+fmtDate(wd)+'</span>';
@@ -384,15 +397,27 @@ function renderManage(){
   var rows=S.acts.map(function(a){return'<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid #2E2C28;"><div style="display:flex;align-items:center;gap:10px;"><span class="dot" style="width:9px;height:9px;background:'+CAT_COLOR[a.cat]+';"></span><div><div style="font-size:14px;color:#F2EFE9;">'+esc(a.name)+'</div><div class="eyebrow-sm">'+esc(a.cat)+'</div></div></div><button class="btn-del" data-action="del-act" data-name="'+esc(a.name)+'">'+IC.trash+'</button></div>';}).join('');
   var catOpts=CATS.map(function(c){return'<option value="'+esc(c)+'"'+(S._addCat===c?' selected':'')+'>'+esc(c)+'</option>';}).join('');
   var typeOpts=Object.keys(TYPE_LBL).map(function(t){return'<option value="'+esc(t)+'"'+(S._addType===t?' selected':'')+'>'+esc(TYPE_LBL[t])+'</option>';}).join('');
+
+  var backupJson=JSON.stringify({log:S.log,weightLog:S.weightLog,notes:S.notes,profile:S.profile,acts:S.acts,unit:S.unit});
+
   return'<div class="page"><button class="back" data-action="home" style="margin-bottom:18px;">'+IC.back+' Home</button>'+
     '<h2 class="display" style="font-size:20px;color:#F2EFE9;margin-bottom:4px;">Activities</h2>'+
     '<p class="muted" style="font-size:14px;margin-bottom:20px;">Add or remove workout activities.</p>'+
+
     '<div class="surf" style="padding:16px;margin-bottom:16px;"><span class="eyebrow">Add New</span><div style="display:flex;flex-direction:column;gap:10px;margin-top:4px;">'+
       '<label><span class="eyebrow">Name</span><input class="ti" data-field="add-name" value="'+esc(S._addName||'')+'" placeholder="e.g. Cable Fly"/></label>'+
       '<label><span class="eyebrow">Category</span><select class="si" data-field="add-cat">'+catOpts+'</select></label>'+
       '<label><span class="eyebrow">Type</span><select class="si" data-field="add-type">'+typeOpts+'</select></label>'+
       '<button class="btn" data-action="add-act" style="margin-top:4px;">'+IC.plus+' Add Activity</button></div></div>'+
-    '<div class="surf" style="padding:16px;"><span class="eyebrow">All Activities ('+S.acts.length+')</span>'+rows+'</div></div>';
+    '<div class="surf" style="padding:16px;margin-bottom:16px;"><span class="eyebrow">All Activities ('+S.acts.length+')</span>'+rows+'</div>'+
+
+    '<div class="surf" style="padding:16px;">'+
+      '<span class="eyebrow">Backup &amp; Restore</span>'+
+      '<p class="muted" style="font-size:12px;margin-bottom:12px;line-height:1.5;">Copy the text below to back up all your data. To restore, paste it back and tap Restore.</p>'+
+      '<textarea class="ta" id="backup-ta" style="font-size:11px;font-family:\'Courier New\',Courier,monospace;min-height:60px;">'+esc(backupJson)+'</textarea>'+
+      '<button class="btn" data-action="restore-data" style="margin-top:10px;font-size:13px;">Restore from Backup</button>'+
+    '</div>'+
+    '</div>';
 }
 function renderGraph(){
   var rangeDays={week:7,month:30,'3m':90,'6m':180,year:365};
@@ -447,11 +472,13 @@ document.addEventListener('click',function(e){
     var name=el.dataset.name;var a=null;
     for(var i=0;i<S.acts.length;i++){if(S.acts[i].name===name){a=S.acts[i];break;}}
     if(!a)return;S.act=a;var last=lastEntry(name);var entry=blankEntry();
-    if(a.type==='cardio'){entry.incline=last&&last.incline!=null?String(last.incline):'';entry.speed=last&&last.speed!=null?String(last.speed):'';entry.incCarried=entry.incline!=='';entry.spdCarried=entry.speed!=='';}
+    if(a.type==='cardio'){entry.incline=last&&last.incline!=null?String(last.incline):'';entry.speed=last&&last.speed!=null?String(last.speed):'';entry.time=last&&last.time!=null?String(last.time):'';entry.incCarried=entry.incline!=='';entry.spdCarried=entry.speed!=='';}
     else{for(var j=0;j<3;j++){var w=last&&last.sets&&last.sets[j]?String(last.sets[j].weight||''):'';entry.sets[j].weight=w;entry.sets[j].carried=w!=='';}}
     S.entry=entry;S.screen='activity';render();
   }
-  else if(act==='rate'){var r=el.dataset.rating;S.entry.rating=(S.entry.rating===r?null:r);render();}
+  else if(act==='rate'){
+    if(S.entry){var r=el.dataset.rating;S.entry.rating=(S.entry.rating===r?null:r);render();}
+  }
   else if(act==='save'){
     var a2=S.act;var en=S.entry;var saveDate=S.workoutDate||today();
     var rec={id:Date.now(),date:saveDate,name:a2.name,cat:a2.cat,type:a2.type,rating:en.rating,note:en.note||''};
@@ -461,6 +488,23 @@ document.addEventListener('click',function(e){
   }
   else if(act==='add-act'){var nm=(S._addName||'').trim();if(!nm){alert('Please enter a name.');return;}if(S.acts.some(function(a){return a.name.toLowerCase()===nm.toLowerCase();})){alert('Already exists.');return;}S.acts.push({name:nm,cat:S._addCat||'Arm & Shoulder',type:S._addType||'strength'});S._addName='';saveActs();render();}
   else if(act==='del-act'){var dn=el.dataset.name;if(confirm('Delete "'+dn+'"?')){S.acts=S.acts.filter(function(a){return a.name!==dn;});saveActs();render();}}
+  else if(act==='restore-data'){
+    var ta=document.getElementById('backup-ta');
+    if(!ta)return;
+    try{
+      var d=JSON.parse(ta.value);
+      if(!d.log||!Array.isArray(d.log)){alert('Invalid backup data.');return;}
+      if(!confirm('This will replace ALL current data with the backup. Continue?'))return;
+      if(d.log)        {S.log=d.log;        saveLog();}
+      if(d.weightLog)  {S.weightLog=d.weightLog;try{localStorage.setItem('il_wl',JSON.stringify(S.weightLog));}catch(e){}}
+      if(d.notes)      {S.notes=d.notes;    saveNotes();}
+      if(d.profile)    {S.profile=d.profile;saveProfile();}
+      if(d.acts)       {S.acts=d.acts;      saveActs();}
+      if(d.unit)       {S.unit=d.unit;      try{localStorage.setItem('il_unit',d.unit);}catch(e){}}
+      alert('Data restored! '+d.log.length+' workout entries loaded.');
+      S.screen='home';render();
+    }catch(ex){alert('Could not read backup — make sure you copied the full text.');}
+  }
 });
 document.addEventListener('input',function(e){
   var f=e.target.dataset.field;if(!f)return;var v=e.target.value;
