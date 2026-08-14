@@ -211,7 +211,7 @@ function buildOrder(){
   while(added){added=false;cats.forEach(function(c){if(bc[c]&&bc[c].length){order.push(bc[c].shift());added=true;}});}
   return order;
 }
-function doneNames(date){var t=date||today();var d={};S.log.filter(function(e){return e.date===t;}).forEach(function(e){d[e.name]=true;});return d;}
+function doneNames(date){var t=date||today();var d={};S.log.filter(function(e){return e.date===t;}).forEach(function(e){d[e.name]=e;});return d;}
 function setWt(e){if(!e||!e.sets)return 0;return e.sets.reduce(function(a,s){var r=s.leftReps!==''?nv(s.leftReps)+nv(s.rightReps):nv(s.reps);return a+nv(s.weight)*r;},0);}
 function dayTotal(date){return S.log.filter(function(e){return e.date===date&&e.sets;}).reduce(function(s,e){return s+setWt(e);},0);}
 function lastEntry(name){return S.log.filter(function(e){return e.name===name;}).sort(function(a,b){return b.id-a.id;})[0]||null;}
@@ -361,12 +361,19 @@ function renderList(){
   }
   var bars=ord.map(function(a){return'<span class="pb-seg" style="background:'+(done[a.name]?CAT_COLOR[a.cat]:'#3A362F')+'" title="'+esc(a.name)+'"></span>';}).join('');
   var btns=ord.map(function(a){
-    if(done[a.name]){
-      return'<button class="card" data-action="pick" data-name="'+esc(a.name)+'" style="background:#D9A441;border-color:#C89030;">'+
-        '<span style="width:11px;height:11px;border-radius:9999px;background:#1C1B1A;display:inline-block;flex-shrink:0;"></span>'+
-        '<div style="flex:1;text-align:left;"><div style="font-weight:600;color:#1C1B1A;">'+esc(a.name)+'</div>'+
-        '<div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#5A4010;">'+esc(a.cat)+'</div></div>'+
-        '<span style="color:#1C1B1A;font-size:20px;font-weight:700;">&#10003;</span></button>';
+    var entry=done[a.name];
+    if(entry){
+      var isComplete=entry.complete===true;
+      var bg=isComplete?'#1E4A38':'#D9A441';
+      var border=isComplete?'#2D7A5A':'#C89030';
+      var textColor=isComplete?'#A8DFC4':'#1C1B1A';
+      var catColor=isComplete?'#4A8C70':'#5A4010';
+      var checkColor=isComplete?'#4AC48A':'#1C1B1A';
+      return'<button class="card" data-action="pick" data-name="'+esc(a.name)+'" style="background:'+bg+';border-color:'+border+';">'+
+        '<span style="width:11px;height:11px;border-radius:9999px;background:'+(isComplete?'#4AC48A':'#1C1B1A')+';display:inline-block;flex-shrink:0;"></span>'+
+        '<div style="flex:1;text-align:left;"><div style="font-weight:600;color:'+textColor+';">'+esc(a.name)+'</div>'+
+        '<div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:'+catColor+';">'+esc(a.cat)+'</div></div>'+
+        '<span style="color:'+checkColor+';font-size:20px;font-weight:700;">&#10003;</span></button>';
     }
     return'<button class="card" data-action="pick" data-name="'+esc(a.name)+'">'+
       '<span class="dot" style="width:11px;height:11px;background:'+CAT_COLOR[a.cat]+';"></span>'+
@@ -445,7 +452,7 @@ function renderGraph(){
 function autoSave(){
   if(!S.act||!S.entry)return;
   var a=S.act,en=S.entry,saveDate=S.workoutDate||today();
-  var rec={id:Date.now(),date:saveDate,name:a.name,cat:a.cat,type:a.type,rating:en.rating,note:en.note||''};
+  var rec={id:Date.now(),date:saveDate,name:a.name,cat:a.cat,type:a.type,rating:en.rating,note:en.note||'',complete:false};
   if(a.type==='cardio'){rec.incline=en.incline;rec.speed=en.speed;rec.time=en.time;}
   else{rec.sets=en.sets.map(function(s){return{weight:s.weight,reps:s.reps,leftReps:s.leftReps,rightReps:s.rightReps};});}
   /* replace any existing entry for this activity today */
@@ -500,7 +507,7 @@ document.addEventListener('click',function(e){
   }
   else if(act==='save'){
     var a2=S.act;var en=S.entry;var saveDate=S.workoutDate||today();
-    var rec={id:Date.now(),date:saveDate,name:a2.name,cat:a2.cat,type:a2.type,rating:en.rating,note:en.note||''};
+    var rec={id:Date.now(),date:saveDate,name:a2.name,cat:a2.cat,type:a2.type,rating:en.rating,note:en.note||'',complete:true};
     if(a2.type==='cardio'){rec.incline=en.incline;rec.speed=en.speed;rec.time=en.time;}
     else{rec.sets=en.sets.map(function(s){return{weight:s.weight,reps:s.reps,leftReps:s.leftReps,rightReps:s.rightReps};});}
     /* replace any existing entry for this activity today rather than duplicating */
