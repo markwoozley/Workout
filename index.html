@@ -173,7 +173,7 @@ var EASY='😌 Easy',GOOD='💪 Good',HARD='🔥 Too Hard';
 var RATINGS=[{key:'easy',label:EASY,cls:'easy-on'},{key:'good',label:GOOD,cls:'good-on'},{key:'too_hard',label:HARD,cls:'hard-on'}];
 var RATING_COLOR={easy:'#7AC4A8',good:'#D9A441',too_hard:'#E07050'};
 var RATING_LABEL={easy:EASY,good:GOOD,too_hard:HARD};
-var S={screen:'home',profile:{name:'',heightIn:'',weightLb:'',waist:'',waistUnit:'in'},log:[],weightLog:[],acts:[],notes:{},act:null,entry:null,graphRange:'month',workoutDate:'',unit:'lb'};
+var S={screen:'home',profile:{name:'',heightIn:'',weightLb:'',waist:'',waistUnit:'in'},log:[],weightLog:[],waistLog:[],acts:[],notes:{},act:null,entry:null,graphRange:'month',workoutDate:'',unit:'lb'};
 function blankEntry(){return{incline:'',speed:'',time:'',rating:null,note:'',incCarried:false,spdCarried:false,incTouched:false,spdTouched:false,sets:[0,1,2].map(function(){return{weight:'',reps:'',leftReps:'',rightReps:'',carried:false,touched:false};})}}
 function load(){
   try{var p=localStorage.getItem('il_p');if(p)S.profile=JSON.parse(p);}catch(e){}
@@ -182,6 +182,7 @@ function load(){
   try{var a=localStorage.getItem('il_acts');S.acts=a?JSON.parse(a):BUILT_IN.slice();}catch(e){S.acts=BUILT_IN.slice();}
   try{var n=localStorage.getItem('il_notes');if(n)S.notes=JSON.parse(n);}catch(e){}
   try{var u=localStorage.getItem('il_unit');if(u)S.unit=u;}catch(e){}
+  try{var wl2=localStorage.getItem('il_wl2');if(wl2)S.waistLog=JSON.parse(wl2);}catch(e){}
 }
 var _pt=null;
 function saveProfile(){clearTimeout(_pt);_pt=setTimeout(function(){try{localStorage.setItem('il_p',JSON.stringify(S.profile));}catch(e){}},600);}
@@ -194,6 +195,14 @@ function logWeight(w){
   if(idx>=0)S.weightLog[idx].weight=wv;else S.weightLog.push({date:t,weight:wv});
   S.weightLog.sort(function(a,b){return a.date.localeCompare(b.date);});
   try{localStorage.setItem('il_wl',JSON.stringify(S.weightLog));}catch(e){}
+}
+function logWaist(w){
+  var wv=nv(w);if(!wv)return;var t=today();var idx=-1;
+  for(var i=0;i<S.waistLog.length;i++){if(S.waistLog[i].date===t){idx=i;break;}}
+  if(idx>=0){S.waistLog[idx].waist=wv;S.waistLog[idx].unit=S.profile.waistUnit||'in';}
+  else S.waistLog.push({date:t,waist:wv,unit:S.profile.waistUnit||'in'});
+  S.waistLog.sort(function(a,b){return a.date.localeCompare(b.date);});
+  try{localStorage.setItem('il_wl2',JSON.stringify(S.waistLog));}catch(e){}
 }
 function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
 function pad(n){return n<10?'0'+n:''+n;}
@@ -331,11 +340,13 @@ function renderHome(){
           '<label><span class="eyebrow">Height</span><div style="position:relative;"><input type="number" inputmode="decimal" class="ni" data-field="heightIn" value="'+esc(p.heightIn)+'" placeholder="70" style="font-size:16px;padding-right:34px;"/><span class="muted mono" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:12px;">in</span></div></label>'+
           '<label><span class="eyebrow">Weight</span><div style="position:relative;"><input type="number" inputmode="decimal" class="ni" data-field="weightLb" value="'+esc(p.weightLb)+'" placeholder="165" style="font-size:16px;padding-right:32px;"/><span class="muted mono" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:12px;">lb</span></div></label>'+
         '</div>'+
-        '<label style="display:block;"><span class="eyebrow">Waist</span>'+
-          '<div style="position:relative;">'+
-            '<input type="number" inputmode="decimal" class="ni" data-field="waist" value="'+esc(p.waist||'')+'" placeholder="0" style="font-size:16px;padding-right:60px;"/>'+
-            '<button data-action="toggle-waist-unit" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:#3A362F;border:1px solid #555048;color:#F2EFE9;padding:4px 9px;border-radius:4px;font-size:12px;cursor:pointer;font-family:inherit;font-family:\'Courier New\',Courier,monospace;">'+esc(p.waistUnit||'in')+'</button>'+
-          '</div></label>'+
+        '<div style="display:flex;align-items:center;gap:10px;margin-top:6px;">'+
+          '<span class="eyebrow" style="margin:0;white-space:nowrap;min-width:40px;">Waist</span>'+
+          '<div style="position:relative;flex:1;">'+
+            '<input type="number" inputmode="decimal" class="ni" data-field="waist" value="'+esc(p.waist||'')+'" placeholder="0" style="font-size:16px;padding-right:52px;"/>'+
+            '<button data-action="toggle-waist-unit" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:#3A362F;border:1px solid #555048;color:#F2EFE9;padding:4px 8px;border-radius:4px;font-size:12px;cursor:pointer;font-family:\'Courier New\',Courier,monospace;">'+esc(p.waistUnit||'in')+'</button>'+
+          '</div>'+
+        '</div>'+
         '</div>'+
       '<div id="bmi-slot">'+bmiHtml+'</div></div>'+
     '<div class="surf" style="padding:14px 16px;margin-bottom:14px;">'+
@@ -443,16 +454,35 @@ function renderGraph(){
   var days=rangeDays[S.graphRange]||30;var cutoff=new Date();cutoff.setDate(cutoff.getDate()-days);
   var cs=cutoff.getFullYear()+'-'+pad(cutoff.getMonth()+1)+'-'+pad(cutoff.getDate());
   var filtered=S.weightLog.filter(function(d){return d.date>=cs;});
+  var filteredW=S.waistLog.filter(function(d){return d.date>=cs;});
   var rBtns=['week','month','3m','6m','year'].map(function(r){var lbl={week:'Week',month:'Month','3m':'3M','6m':'6M',year:'Year'}[r];return'<button class="rng-btn'+(S.graphRange===r?' on':'')+'" data-action="gr" data-range="'+r+'">'+lbl+'</button>';}).join('');
+
+  /* body weight chart */
   var chart='<p class="muted" style="font-size:14px;text-align:center;padding:40px 0;">No data yet. Update your weight on the home screen to track it.</p>';
   if(filtered.length===1){chart='<div style="text-align:center;padding:28px 0;"><div class="mono" style="font-size:40px;color:#F2EFE9;">'+filtered[0].weight+'</div><div class="eyebrow" style="margin-top:6px;">lb &middot; '+fmtDate(filtered[0].date)+'</div></div>';}
   else if(filtered.length>1){chart=makeLineSVG(filtered,'weight','#D9A441');}
-  var recent=S.weightLog.slice().reverse().slice(0,10);
-  var recentHtml=recent.length?'<div class="surf" style="padding:16px;"><span class="eyebrow">Recent Entries</span>'+recent.map(function(d){return'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #2E2C28;"><span style="font-size:14px;color:#F2EFE9;">'+fmtDate(d.date)+'</span><span class="mono" style="font-size:16px;color:#F2EFE9;">'+d.weight+' lb</span></div>';}).join('')+'</div>':'';
+
+  /* waist chart */
+  var waistUnit=S.profile.waistUnit||'in';
+  var waistChart='<p class="muted" style="font-size:14px;text-align:center;padding:32px 0;">No data yet. Update your waist on the home screen to track it.</p>';
+  if(filteredW.length===1){waistChart='<div style="text-align:center;padding:20px 0;"><div class="mono" style="font-size:36px;color:#F2EFE9;">'+filteredW[0].waist+'</div><div class="eyebrow" style="margin-top:6px;">'+waistUnit+' &middot; '+fmtDate(filteredW[0].date)+'</div></div>';}
+  else if(filteredW.length>1){waistChart=makeLineSVG(filteredW,'waist','#5B8FA8');}
+
   return'<div class="page"><button class="back" data-action="home" style="margin-bottom:18px;">'+IC.back+' Home</button>'+
-    '<h2 class="display" style="font-size:20px;color:#F2EFE9;margin-bottom:4px;">Body Weight</h2>'+
-    '<p class="muted" style="font-size:14px;margin-bottom:16px;">Auto-logged when you update weight on home screen.</p>'+
-    '<div class="surf" style="padding:16px;margin-bottom:14px;"><div style="display:flex;gap:6px;margin-bottom:14px;">'+rBtns+'</div>'+chart+'</div>'+recentHtml+'</div>';
+    '<h2 class="display" style="font-size:20px;color:#F2EFE9;margin-bottom:4px;">Measurements</h2>'+
+    '<p class="muted" style="font-size:14px;margin-bottom:16px;">Auto-logged when you update on the home screen.</p>'+
+    '<div style="display:flex;gap:6px;margin-bottom:14px;">'+rBtns+'</div>'+
+    '<div class="surf" style="padding:16px;margin-bottom:14px;">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+
+        '<span style="width:10px;height:10px;border-radius:9999px;background:#D9A441;display:inline-block;"></span>'+
+        '<span class="eyebrow" style="display:inline;margin:0;">Body Weight</span>'+
+      '</div>'+chart+'</div>'+
+    '<div class="surf" style="padding:16px;margin-bottom:14px;">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+
+        '<span style="width:10px;height:10px;border-radius:9999px;background:#5B8FA8;display:inline-block;"></span>'+
+        '<span class="eyebrow" style="display:inline;margin:0;">Waist ('+waistUnit+')</span>'+
+      '</div>'+waistChart+'</div>'+
+    '</div>';
 }
 
 function autoSave(){
@@ -549,6 +579,7 @@ document.addEventListener('input',function(e){
   if(f==='name'||f==='heightIn'||f==='weightLb'||f==='waist'){
     S.profile[f]=v;saveProfile();
     if(f==='weightLb'&&nv(v))logWeight(v);
+    if(f==='waist'&&nv(v))logWaist(v);
     if(f==='heightIn'||f==='weightLb'){var b=bmi(nv(S.profile.heightIn),nv(S.profile.weightLb));var slot=document.getElementById('bmi-slot');if(slot){if(!b)slot.innerHTML='';else slot.innerHTML='<div class="divtop" style="display:flex;align-items:center;justify-content:space-between;"><div><span class="eyebrow">BMI</span><div class="mono" style="font-size:24px;color:#F2EFE9;">'+b.toFixed(1)+'</div></div><span class="tag">'+bmiLbl(b)+'</span></div>';}}return;
   }
   if(f==='add-name'){S._addName=v;return;}
