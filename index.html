@@ -173,7 +173,7 @@ var EASY='😌 Easy',GOOD='💪 Good',HARD='🔥 Too Hard';
 var RATINGS=[{key:'easy',label:EASY,cls:'easy-on'},{key:'good',label:GOOD,cls:'good-on'},{key:'too_hard',label:HARD,cls:'hard-on'}];
 var RATING_COLOR={easy:'#7AC4A8',good:'#D9A441',too_hard:'#E07050'};
 var RATING_LABEL={easy:EASY,good:GOOD,too_hard:HARD};
-var S={screen:'home',profile:{name:'',heightIn:'',weightLb:''},log:[],weightLog:[],acts:[],notes:{},act:null,entry:null,graphRange:'month',workoutDate:'',unit:'lb'};
+var S={screen:'home',profile:{name:'',heightIn:'',weightLb:'',waist:'',waistUnit:'in'},log:[],weightLog:[],acts:[],notes:{},act:null,entry:null,graphRange:'month',workoutDate:'',unit:'lb'};
 function blankEntry(){return{incline:'',speed:'',time:'',rating:null,note:'',incCarried:false,spdCarried:false,incTouched:false,spdTouched:false,sets:[0,1,2].map(function(){return{weight:'',reps:'',leftReps:'',rightReps:'',carried:false,touched:false};})}}
 function load(){
   try{var p=localStorage.getItem('il_p');if(p)S.profile=JSON.parse(p);}catch(e){}
@@ -330,7 +330,13 @@ function renderHome(){
         '<div class="grid2">'+
           '<label><span class="eyebrow">Height</span><div style="position:relative;"><input type="number" inputmode="decimal" class="ni" data-field="heightIn" value="'+esc(p.heightIn)+'" placeholder="70" style="font-size:16px;padding-right:34px;"/><span class="muted mono" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:12px;">in</span></div></label>'+
           '<label><span class="eyebrow">Weight</span><div style="position:relative;"><input type="number" inputmode="decimal" class="ni" data-field="weightLb" value="'+esc(p.weightLb)+'" placeholder="165" style="font-size:16px;padding-right:32px;"/><span class="muted mono" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:12px;">lb</span></div></label>'+
-        '</div></div>'+
+        '</div>'+
+        '<label style="display:block;"><span class="eyebrow">Waist</span>'+
+          '<div style="position:relative;">'+
+            '<input type="number" inputmode="decimal" class="ni" data-field="waist" value="'+esc(p.waist||'')+'" placeholder="0" style="font-size:16px;padding-right:60px;"/>'+
+            '<button data-action="toggle-waist-unit" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:#3A362F;border:1px solid #555048;color:#F2EFE9;padding:4px 9px;border-radius:4px;font-size:12px;cursor:pointer;font-family:inherit;font-family:\'Courier New\',Courier,monospace;">'+esc(p.waistUnit||'in')+'</button>'+
+          '</div></label>'+
+        '</div>'+
       '<div id="bmi-slot">'+bmiHtml+'</div></div>'+
     '<div class="surf" style="padding:14px 16px;margin-bottom:14px;">'+
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><span class="muted">'+IC.flame+'</span><span class="eyebrow" style="display:inline;margin:0;">Workout Activity</span></div>'+
@@ -468,6 +474,10 @@ document.addEventListener('click',function(e){
   else if(act==='graph'){S.screen='graph';render();}
   else if(act==='manage'){S.screen='manage';render();}
   else if(act==='gr'){S.graphRange=el.dataset.range;render();}
+  else if(act==='toggle-waist-unit'){
+    S.profile.waistUnit=S.profile.waistUnit==='in'?'cm':'in';
+    saveProfile();render();
+  }
   else if(act==='prev-day'){S.workoutDate=addDays(S.workoutDate||today(),-1);render();}
   else if(act==='next-day'){var nd=addDays(S.workoutDate||today(),1);if(nd<=today()){S.workoutDate=nd;render();}}
   else if(act==='pick'){
@@ -536,7 +546,7 @@ document.addEventListener('click',function(e){
 });
 document.addEventListener('input',function(e){
   var f=e.target.dataset.field;if(!f)return;var v=e.target.value;
-  if(f==='name'||f==='heightIn'||f==='weightLb'){
+  if(f==='name'||f==='heightIn'||f==='weightLb'||f==='waist'){
     S.profile[f]=v;saveProfile();
     if(f==='weightLb'&&nv(v))logWeight(v);
     if(f==='heightIn'||f==='weightLb'){var b=bmi(nv(S.profile.heightIn),nv(S.profile.weightLb));var slot=document.getElementById('bmi-slot');if(slot){if(!b)slot.innerHTML='';else slot.innerHTML='<div class="divtop" style="display:flex;align-items:center;justify-content:space-between;"><div><span class="eyebrow">BMI</span><div class="mono" style="font-size:24px;color:#F2EFE9;">'+b.toFixed(1)+'</div></div><span class="tag">'+bmiLbl(b)+'</span></div>';}}return;
