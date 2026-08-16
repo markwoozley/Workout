@@ -173,7 +173,7 @@ var EASY='😌 Easy',GOOD='💪 Good',HARD='🔥 Too Hard';
 var RATINGS=[{key:'easy',label:EASY,cls:'easy-on'},{key:'good',label:GOOD,cls:'good-on'},{key:'too_hard',label:HARD,cls:'hard-on'}];
 var RATING_COLOR={easy:'#7AC4A8',good:'#D9A441',too_hard:'#E07050'};
 var RATING_LABEL={easy:EASY,good:GOOD,too_hard:HARD};
-var S={screen:'home',profile:{name:'',heightIn:'',weightLb:'',waist:'',waistUnit:'in'},log:[],weightLog:[],waistLog:[],acts:[],notes:{},act:null,entry:null,graphRange:'month',workoutDate:'',unit:'lb'};
+var S={screen:'home',profile:{name:'',heightIn:'',weightLb:'',abdomen:'',waist:'',hip:'',measUnit:'in'},log:[],weightLog:[],abdomenLog:[],waistLog:[],hipLog:[],acts:[],notes:{},act:null,entry:null,graphRange:'month',workoutDate:'',unit:'lb',reviewResult:null};
 function blankEntry(){return{incline:'',speed:'',time:'',rating:null,note:'',incCarried:false,spdCarried:false,incTouched:false,spdTouched:false,sets:[0,1,2].map(function(){return{weight:'',reps:'',leftReps:'',rightReps:'',carried:false,touched:false};})}}
 function load(){
   try{var p=localStorage.getItem('il_p');if(p)S.profile=JSON.parse(p);}catch(e){}
@@ -182,7 +182,9 @@ function load(){
   try{var a=localStorage.getItem('il_acts');S.acts=a?JSON.parse(a):BUILT_IN.slice();}catch(e){S.acts=BUILT_IN.slice();}
   try{var n=localStorage.getItem('il_notes');if(n)S.notes=JSON.parse(n);}catch(e){}
   try{var u=localStorage.getItem('il_unit');if(u)S.unit=u;}catch(e){}
-  try{var wl2=localStorage.getItem('il_wl2');if(wl2)S.waistLog=JSON.parse(wl2);}catch(e){}
+  try{var wl2=localStorage.getItem('il_wl2');if(wl2)S.abdomenLog=JSON.parse(wl2);}catch(e){}
+  try{var wl3=localStorage.getItem('il_wl3');if(wl3)S.waistLog=JSON.parse(wl3);}catch(e){}
+  try{var wl4=localStorage.getItem('il_wl4');if(wl4)S.hipLog=JSON.parse(wl4);}catch(e){}
 }
 var _pt=null;
 function saveProfile(){clearTimeout(_pt);_pt=setTimeout(function(){try{localStorage.setItem('il_p',JSON.stringify(S.profile));}catch(e){}},600);}
@@ -196,13 +198,26 @@ function logWeight(w){
   S.weightLog.sort(function(a,b){return a.date.localeCompare(b.date);});
   try{localStorage.setItem('il_wl',JSON.stringify(S.weightLog));}catch(e){}
 }
+function logAbdomen(w){
+  var wv=nv(w);if(!wv)return;var t=today();var idx=-1;
+  for(var i=0;i<S.abdomenLog.length;i++){if(S.abdomenLog[i].date===t){idx=i;break;}}
+  if(idx>=0)S.abdomenLog[idx].abdomen=wv;else S.abdomenLog.push({date:t,abdomen:wv});
+  S.abdomenLog.sort(function(a,b){return a.date.localeCompare(b.date);});
+  try{localStorage.setItem('il_wl2',JSON.stringify(S.abdomenLog));}catch(e){}
+}
 function logWaist(w){
   var wv=nv(w);if(!wv)return;var t=today();var idx=-1;
   for(var i=0;i<S.waistLog.length;i++){if(S.waistLog[i].date===t){idx=i;break;}}
-  if(idx>=0){S.waistLog[idx].waist=wv;S.waistLog[idx].unit=S.profile.waistUnit||'in';}
-  else S.waistLog.push({date:t,waist:wv,unit:S.profile.waistUnit||'in'});
+  if(idx>=0)S.waistLog[idx].waist=wv;else S.waistLog.push({date:t,waist:wv});
   S.waistLog.sort(function(a,b){return a.date.localeCompare(b.date);});
-  try{localStorage.setItem('il_wl2',JSON.stringify(S.waistLog));}catch(e){}
+  try{localStorage.setItem('il_wl3',JSON.stringify(S.waistLog));}catch(e){}
+}
+function logHip(w){
+  var wv=nv(w);if(!wv)return;var t=today();var idx=-1;
+  for(var i=0;i<S.hipLog.length;i++){if(S.hipLog[i].date===t){idx=i;break;}}
+  if(idx>=0)S.hipLog[idx].hip=wv;else S.hipLog.push({date:t,hip:wv});
+  S.hipLog.sort(function(a,b){return a.date.localeCompare(b.date);});
+  try{localStorage.setItem('il_wl4',JSON.stringify(S.hipLog));}catch(e){}
 }
 function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
 function pad(n){return n<10?'0'+n:''+n;}
@@ -212,6 +227,39 @@ function fmtFull(s){var p=s.split('-').map(Number);return new Date(p[0],p[1]-1,p
 function nv(v){var f=parseFloat(v);return isFinite(f)?f:0;}
 function bmi(h,w){return(!h||!w)?null:703*w/(h*h);}
 function bmiLbl(v){return v<18.5?'Underweight':v<25?'Normal':v<30?'Overweight':'Obese';}
+function buildWHR(p){
+  var w=nv(p.waist),h=nv(p.hip);
+  if(!w||!h)return null;
+  var r=(w/h).toFixed(2);var rv=parseFloat(r);
+  var color;
+  if(rv<0.80){color='#7AC4A8';}
+  else if(rv<0.90){color='#D9A441';}
+  else{color='#E5493D';}
+  return{ratio:r,color:color};
+}
+function buildAHR(p){
+  var a=nv(p.abdomen),h=nv(p.hip);
+  if(!a||!h)return null;
+  var r=(a/h).toFixed(2);var rv=parseFloat(r);
+  var color;
+  if(rv<0.90){color='#7AC4A8';}
+  else if(rv<1.00){color='#D9A441';}
+  else{color='#E5493D';}
+  return{ratio:r,color:color};
+}
+function ratioRow(title,obj){
+  if(!obj)return'';
+  return'<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid #3A362F;">'+
+    '<div>'+
+      '<span class="eyebrow">'+title+'</span>'+
+      '<div class="mono" style="font-size:22px;color:#F2EFE9;">'+obj.ratio+'</div>'+
+    '</div>'+
+    '<div style="text-align:right;">'+
+      '<div style="font-size:10px;color:#8A8478;line-height:1.5;margin-bottom:3px;">men &lt;0.9 &nbsp;women &lt;0.8</div>'+
+      '<div style="font-size:11px;color:'+obj.color+';font-weight:600;">'+(obj.color==='#7AC4A8'?'On target':'Needs work')+'</div>'+
+    '</div>'+
+  '</div>';
+}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function buildOrder(){
   var acts=S.acts,cats=['Arm & Shoulder','Back','Leg','Core'],bc={};
@@ -308,6 +356,7 @@ function render(){
     else if(S.screen==='activity') html=renderActivity();
     else if(S.screen==='manage')   html=renderManage();
     else if(S.screen==='graph')    html=renderGraph();
+  else if(S.screen==='review')   html=renderReview();
   
     if(html) r.innerHTML=html;
   }catch(err){
@@ -324,14 +373,19 @@ function renderHome(){
   var p=S.profile;var b=bmi(nv(p.heightIn),nv(p.weightLb));
   var t=today();var done=doneNames(t);var dc=Object.keys(done).length;var ord=buildOrder();
   var bmiHtml='';
-  if(b){bmiHtml='<div class="divtop" style="display:flex;align-items:center;justify-content:space-between;"><div><span class="eyebrow">BMI</span><div class="mono" style="font-size:24px;color:#F2EFE9;">'+b.toFixed(1)+'</div></div><span class="tag">'+bmiLbl(b)+'</span></div>';}
+  var whr=buildWHR(p);
+  var ahr=buildAHR(p);
+  if(b){
+    bmiHtml='<div class="divtop" style="display:flex;align-items:center;justify-content:space-between;"><div><span class="eyebrow">BMI</span><div class="mono" style="font-size:24px;color:#F2EFE9;">'+b.toFixed(1)+'</div></div><span class="tag">'+bmiLbl(b)+'</span></div>';
+  }
+  bmiHtml+=ratioRow('Waist-to-Hip',whr);
   var wBtn=dc>0
     ?'<div class="resume-bar"><div><div class="eyebrow" style="margin-bottom:2px;">Today&#39;s Progress</div><div style="font-size:14px;font-weight:600;color:#F2EFE9;">'+dc+' of '+ord.length+' done</div></div><button class="btn" data-action="start-today" style="width:auto;padding:10px 16px;font-size:13px;">Resume '+IC.chev+'</button></div>'
     :'<button class="btn" data-action="start-today" style="margin-bottom:12px;">Start Today&#39;s Workout '+IC.chev+'</button>';
   return'<div class="page">'+
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><span class="accent">'+IC.db+'</span>'+
-    '<h1 class="display" style="font-size:24px;color:#F2EFE9;">The Gym<sup style="font-size:13px;vertical-align:super;">&trade;</sup></h1></div>'+
-    '<p class="muted" style="font-size:14px;margin-bottom:24px;">Lifeone gym &middot; Frederick</p>'+
+    '<h1 class="display" style="font-size:24px;color:#F2EFE9;">The Gym<sup style="font-size:13px;vertical-align:super;">&trade;</sup><span style="font-size:9px;color:#4A4540;font-weight:400;letter-spacing:.06em;margin-left:8px;vertical-align:middle;">v2026.08.16</span></h1></div>'+
+    '<p class="muted" style="font-size:14px;margin-bottom:20px;">Lifeone gym &middot; Frederick</p>'+
     '<div class="surf" style="padding:16px;margin-bottom:14px;">'+
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;"><span class="muted">'+IC.user+'</span><span class="eyebrow" style="display:inline;margin:0;">Profile</span></div>'+
       '<div style="display:flex;flex-direction:column;gap:10px;">'+
@@ -340,12 +394,19 @@ function renderHome(){
           '<label><span class="eyebrow">Height</span><div style="position:relative;"><input type="number" inputmode="decimal" class="ni" data-field="heightIn" value="'+esc(p.heightIn)+'" placeholder="70" style="font-size:16px;padding-right:34px;"/><span class="muted mono" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:12px;">in</span></div></label>'+
           '<label><span class="eyebrow">Weight</span><div style="position:relative;"><input type="number" inputmode="decimal" class="ni" data-field="weightLb" value="'+esc(p.weightLb)+'" placeholder="165" style="font-size:16px;padding-right:32px;"/><span class="muted mono" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:12px;">lb</span></div></label>'+
         '</div>'+
-        '<div style="display:flex;align-items:center;gap:10px;margin-top:6px;">'+
-          '<span class="eyebrow" style="margin:0;white-space:nowrap;min-width:40px;">Waist</span>'+
-          '<div style="position:relative;flex:1;">'+
-            '<input type="number" inputmode="decimal" class="ni" data-field="waist" value="'+esc(p.waist||'')+'" placeholder="0" style="font-size:16px;padding-right:52px;"/>'+
-            '<button data-action="toggle-waist-unit" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:#3A362F;border:1px solid #555048;color:#F2EFE9;padding:4px 8px;border-radius:4px;font-size:12px;cursor:pointer;font-family:\'Courier New\',Courier,monospace;">'+esc(p.waistUnit||'in')+'</button>'+
-          '</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;">'+
+          '<label style="display:block;"><span class="eyebrow" style="font-size:10px;">Abdomen</span>'+
+            '<input type="number" inputmode="decimal" class="ni" data-field="abdomen" value="'+esc(p.abdomen||'')+'" placeholder="0" style="font-size:15px;padding-right:4px;"/>'+
+          '</label>'+
+          '<label style="display:block;"><span class="eyebrow" style="font-size:10px;">Waist</span>'+
+            '<input type="number" inputmode="decimal" class="ni" data-field="waist" value="'+esc(p.waist||'')+'" placeholder="0" style="font-size:15px;padding-right:4px;"/>'+
+          '</label>'+
+          '<label style="display:block;"><span class="eyebrow" style="font-size:10px;">Hip</span>'+
+            '<div style="position:relative;">'+
+              '<input type="number" inputmode="decimal" class="ni" data-field="hip" value="'+esc(p.hip||'')+'" placeholder="0" style="font-size:15px;padding-right:34px;"/>'+
+              '<button data-action="toggle-meas-unit" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:#3A362F;border:1px solid #555048;color:#F2EFE9;padding:2px 5px;border-radius:3px;font-size:10px;cursor:pointer;font-family:\'Courier New\',Courier,monospace;">'+esc(p.measUnit||'in')+'</button>'+
+            '</div>'+
+          '</label>'+
         '</div>'+
         '</div>'+
       '<div id="bmi-slot">'+bmiHtml+'</div></div>'+
@@ -355,6 +416,7 @@ function renderHome(){
     wBtn+
     '<div style="display:flex;gap:8px;margin-top:10px;">'+
       '<button class="btn-sm" data-action="graph">'+IC.chart+' Weight</button>'+
+      '<button class="btn-sm" data-action="review" style="color:#9B9284;border-color:#4A4540;">&#129504; Review</button>'+
       '<button class="btn-sm" data-action="manage">'+IC.gear+' Activities</button>'+
     '</div></div>';
 }
@@ -454,35 +516,178 @@ function renderGraph(){
   var days=rangeDays[S.graphRange]||30;var cutoff=new Date();cutoff.setDate(cutoff.getDate()-days);
   var cs=cutoff.getFullYear()+'-'+pad(cutoff.getMonth()+1)+'-'+pad(cutoff.getDate());
   var filtered=S.weightLog.filter(function(d){return d.date>=cs;});
+  var filteredA=S.abdomenLog.filter(function(d){return d.date>=cs;});
   var filteredW=S.waistLog.filter(function(d){return d.date>=cs;});
+  var filteredH=S.hipLog.filter(function(d){return d.date>=cs;});
   var rBtns=['week','month','3m','6m','year'].map(function(r){var lbl={week:'Week',month:'Month','3m':'3M','6m':'6M',year:'Year'}[r];return'<button class="rng-btn'+(S.graphRange===r?' on':'')+'" data-action="gr" data-range="'+r+'">'+lbl+'</button>';}).join('');
+  var mu=S.profile.measUnit||'in';
+
+  function noData(msg){return'<p class="muted" style="font-size:13px;text-align:center;padding:24px 0;">'+msg+'</p>';}
+  function singleVal(v,u,d){return'<div style="text-align:center;padding:16px 0;"><div class="mono" style="font-size:34px;color:#F2EFE9;">'+v+'</div><div class="eyebrow" style="margin-top:4px;">'+u+' &middot; '+fmtDate(d)+'</div></div>';}
+  function chartCard(color,label,data,key,unit){
+    var c=data.length===0?noData('No data yet.'):data.length===1?singleVal(data[0][key],unit,data[0].date):makeLineSVG(data,key,color);
+    return'<div class="surf" style="padding:14px;margin-bottom:12px;">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'+
+        '<span style="width:9px;height:9px;border-radius:9999px;background:'+color+';display:inline-block;"></span>'+
+        '<span class="eyebrow" style="display:inline;margin:0;">'+label+'</span></div>'+c+'</div>';
+  }
 
   /* body weight chart */
-  var chart='<p class="muted" style="font-size:14px;text-align:center;padding:40px 0;">No data yet. Update your weight on the home screen to track it.</p>';
-  if(filtered.length===1){chart='<div style="text-align:center;padding:28px 0;"><div class="mono" style="font-size:40px;color:#F2EFE9;">'+filtered[0].weight+'</div><div class="eyebrow" style="margin-top:6px;">lb &middot; '+fmtDate(filtered[0].date)+'</div></div>';}
-  else if(filtered.length>1){chart=makeLineSVG(filtered,'weight','#D9A441');}
-
-  /* waist chart */
-  var waistUnit=S.profile.waistUnit||'in';
-  var waistChart='<p class="muted" style="font-size:14px;text-align:center;padding:32px 0;">No data yet. Update your waist on the home screen to track it.</p>';
-  if(filteredW.length===1){waistChart='<div style="text-align:center;padding:20px 0;"><div class="mono" style="font-size:36px;color:#F2EFE9;">'+filteredW[0].waist+'</div><div class="eyebrow" style="margin-top:6px;">'+waistUnit+' &middot; '+fmtDate(filteredW[0].date)+'</div></div>';}
-  else if(filteredW.length>1){waistChart=makeLineSVG(filteredW,'waist','#5B8FA8');}
+  var weightChart=filtered.length===0?noData('Update your weight on the home screen to track it.'):
+    filtered.length===1?singleVal(filtered[0].weight,'lb',filtered[0].date):makeLineSVG(filtered,'weight','#D9A441');
 
   return'<div class="page"><button class="back" data-action="home" style="margin-bottom:18px;">'+IC.back+' Home</button>'+
     '<h2 class="display" style="font-size:20px;color:#F2EFE9;margin-bottom:4px;">Measurements</h2>'+
-    '<p class="muted" style="font-size:14px;margin-bottom:16px;">Auto-logged when you update on the home screen.</p>'+
+    '<p class="muted" style="font-size:14px;margin-bottom:14px;">Auto-logged when you update on the home screen.</p>'+
     '<div style="display:flex;gap:6px;margin-bottom:14px;">'+rBtns+'</div>'+
-    '<div class="surf" style="padding:16px;margin-bottom:14px;">'+
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+
-        '<span style="width:10px;height:10px;border-radius:9999px;background:#D9A441;display:inline-block;"></span>'+
-        '<span class="eyebrow" style="display:inline;margin:0;">Body Weight</span>'+
-      '</div>'+chart+'</div>'+
-    '<div class="surf" style="padding:16px;margin-bottom:14px;">'+
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+
-        '<span style="width:10px;height:10px;border-radius:9999px;background:#5B8FA8;display:inline-block;"></span>'+
-        '<span class="eyebrow" style="display:inline;margin:0;">Waist ('+waistUnit+')</span>'+
-      '</div>'+waistChart+'</div>'+
+    '<div class="surf" style="padding:14px;margin-bottom:12px;">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'+
+        '<span style="width:9px;height:9px;border-radius:9999px;background:#D9A441;display:inline-block;"></span>'+
+        '<span class="eyebrow" style="display:inline;margin:0;">Body Weight</span></div>'+weightChart+'</div>'+
+    chartCard('#9B9284','Abdomen ('+mu+')',filteredA,'abdomen',mu)+
+    chartCard('#5B8FA8','Waist ('+mu+')',filteredW,'waist',mu)+
+    chartCard('#B2593F','Hip ('+mu+')',filteredH,'hip',mu)+
     '</div>';
+}
+
+function renderReview(){
+  var body='';
+  if(!S.reviewResult){
+    /* landing — choose mode and optionally enter health data */
+    var hm=S.healthMetrics||{};
+    body=
+      '<div style="margin-bottom:18px;">'+
+        '<div class="eyebrow" style="margin-bottom:10px;">Choose review type</div>'+
+        '<div style="display:flex;gap:10px;">'+
+          '<button data-action="run-checkin" class="btn" style="flex:1;flex-direction:column;gap:2px;padding:12px 6px;font-size:12px;line-height:1.3;">'+
+            '<span style="font-size:18px;">&#9889;</span>'+
+            'Check-in<br/><span style="font-weight:400;font-size:10px;opacity:.8;">Last 15 days</span>'+
+          '</button>'+
+          '<button data-action="run-review" class="btn" style="flex:1;flex-direction:column;gap:2px;padding:12px 6px;font-size:12px;line-height:1.3;background:#3A362F;color:#F2EFE9;">'+
+            '<span style="font-size:18px;">&#129504;</span>'+
+            'Full Review<br/><span style="font-weight:400;font-size:10px;opacity:.7;">Last 30 days</span>'+
+          '</button>'+
+        '</div>'+
+      '</div>'+
+      '<div class="surf" style="padding:14px;margin-bottom:14px;">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'+
+          '<span class="eyebrow" style="margin:0;">Health Data <span style="font-weight:400;text-transform:none;font-size:10px;color:#6E695E;">(optional — improves feedback)</span></span>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'+
+          '<label style="display:block;"><span class="eyebrow" style="font-size:10px;">Resting HR<span class="muted" style="text-transform:none;letter-spacing:0;margin-left:4px;">bpm</span></span>'+
+            '<input type="number" inputmode="decimal" class="ni" data-field="hm-rhr" value="'+esc(hm.rhr||'')+'" placeholder="60" style="font-size:15px;"/></label>'+
+          '<label style="display:block;"><span class="eyebrow" style="font-size:10px;">HRV<span class="muted" style="text-transform:none;letter-spacing:0;margin-left:4px;">ms</span></span>'+
+            '<input type="number" inputmode="decimal" class="ni" data-field="hm-hrv" value="'+esc(hm.hrv||'')+'" placeholder="45" style="font-size:15px;"/></label>'+
+          '<label style="display:block;"><span class="eyebrow" style="font-size:10px;">Avg Sleep<span class="muted" style="text-transform:none;letter-spacing:0;margin-left:4px;">hrs</span></span>'+
+            '<input type="number" inputmode="decimal" class="ni" data-field="hm-sleep" value="'+esc(hm.sleep||'')+'" placeholder="7.5" style="font-size:15px;"/></label>'+
+          '<label style="display:block;"><span class="eyebrow" style="font-size:10px;">Daily Steps</span>'+
+            '<input type="number" inputmode="decimal" class="ni" data-field="hm-steps" value="'+esc(hm.steps||'')+'" placeholder="8000" style="font-size:15px;"/></label>'+
+        '</div>'+
+        '<p class="muted" style="font-size:11px;margin-top:10px;line-height:1.5;">Find these in <strong style="color:#8A8478;">Garmin Connect</strong> or <strong style="color:#8A8478;">Apple Health</strong> → Summary. These are not stored.</p>'+
+      '</div>';
+  }else if(S.reviewResult==='loading'){
+    var modeLabel=S.reviewMode==='checkin'?'Check-in (15 days)':'Full Review (30 days)';
+    body='<div style="text-align:center;padding:50px 20px;">'+
+      '<div style="font-size:36px;margin-bottom:16px;">'+(S.reviewMode==='checkin'?'&#9889;':'&#129504;')+'</div>'+
+      '<div style="color:#F2EFE9;font-size:16px;font-weight:600;margin-bottom:6px;">'+modeLabel+'</div>'+
+      '<div style="color:#8A8478;font-size:14px;margin-bottom:24px;">Analysing your history...</div>'+
+      '<div style="height:4px;background:#3A362F;border-radius:2px;overflow:hidden;">'+
+        '<div id="review-bar" style="height:100%;width:0%;background:#D9A441;border-radius:2px;transition:width 0.4s;"></div>'+
+      '</div></div>';
+  }else if(S.reviewResult==='error'){
+    body='<div style="text-align:center;padding:40px 20px;">'+
+      '<div style="font-size:32px;margin-bottom:12px;">&#9888;</div>'+
+      '<div style="color:#F2EFE9;font-size:15px;margin-bottom:8px;">Could not complete review</div>'+
+      '<div style="color:#8A8478;font-size:13px;margin-bottom:20px;">Log at least a few workouts and try again.</div>'+
+      '<button class="btn" data-action="review" style="max-width:200px;margin:0 auto;">Back</button></div>';
+  }else{
+    var modeTag=S.reviewMode==='checkin'?
+      '<span style="font-size:10px;border:1px solid #5B8FA8;color:#5B8FA8;border-radius:9999px;padding:2px 8px;margin-left:8px;">15-day check-in</span>':
+      '<span style="font-size:10px;border:1px solid #D9A441;color:#D9A441;border-radius:9999px;padding:2px 8px;margin-left:8px;">30-day review</span>';
+    var html2=S.reviewResult
+      .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+      .replace(/^#{1,3}\s+(.+)$/gm,'<div class="eyebrow" style="margin:18px 0 6px;">$1</div>')
+      .replace(/^[-\*]\s+(.+)$/gm,'<div style="display:flex;gap:8px;margin:6px 0;"><span style="color:#D9A441;flex-shrink:0;">&#8226;</span><span>$1</span></div>')
+      .replace(/\n\n/g,'<div style="height:10px;"></div>')
+      .replace(/\n/g,'<br/>');
+    body='<div style="display:flex;align-items:center;margin-bottom:14px;">'+
+        '<span style="font-size:13px;color:#8A8478;">Results</span>'+modeTag+'</div>'+
+      '<div style="font-size:14px;color:#C8C0B8;line-height:1.7;">'+html2+'</div>'+
+      '<button class="btn-out" data-action="review" style="margin-top:24px;">New Review</button>';
+  }
+  return'<div class="page">'+
+    '<button class="back" data-action="home" style="margin-bottom:18px;">'+IC.back+' Home</button>'+
+    '<h2 class="display" style="font-size:20px;color:#F2EFE9;margin-bottom:4px;">Workout Review</h2>'+
+    '<p class="muted" style="font-size:14px;margin-bottom:20px;">AI-powered analysis of your training history.</p>'+
+    '<div class="surf" style="padding:18px;">'+body+'</div></div>';
+}
+
+function startReview(mode){
+  S.reviewMode=mode;
+  S.reviewResult='loading';
+  render();
+  var days2=mode==='checkin'?15:30;
+  if(S.log.length<2){S.reviewResult='error';render();return;}
+  var pct=0;var bar=setInterval(function(){
+    pct=Math.min(pct+2,88);
+    var el=document.getElementById('review-bar');
+    if(el)el.style.width=pct+'%';
+  },250);
+  var days={};
+  S.log.forEach(function(e){if(!days[e.date])days[e.date]=[];days[e.date].push(e);});
+  var dayKeys=Object.keys(days).sort();
+  var summary=dayKeys.slice(-days2).map(function(d){
+    return d+': '+days[d].map(function(e){
+      if(e.type==='cardio')return e.name+' (incline:'+e.incline+'% speed:'+e.speed+'mph time:'+e.time+'min)';
+      if(!e.sets)return e.name;
+      var setStr=e.sets.filter(function(s){return nv(s.weight)>0||nv(s.reps)>0;}).map(function(s){
+        if(s.leftReps!==undefined&&s.leftReps!=='')return nv(s.weight)+'lb L'+nv(s.leftReps)+'/R'+nv(s.rightReps);
+        return nv(s.weight)+'lb x'+nv(s.reps);
+      }).join(', ');
+      return e.name+(setStr?' ('+setStr+')':'')+(e.rating?' ['+e.rating+']':'');
+    }).join('; ');
+  }).join('\n');
+  var p=S.profile;
+  var hm=S.healthMetrics||{};
+  var profileStr='Name:'+p.name+' Height:'+p.heightIn+'in Weight:'+p.weightLb+'lb'
+    +(p.waist?' Waist:'+p.waist+(p.measUnit||'in'):'')
+    +(p.hip?' Hip:'+p.hip+(p.measUnit||'in'):'');
+  var hmStr='';
+  if(hm.rhr)hmStr+=' Resting HR:'+hm.rhr+'bpm';
+  if(hm.hrv)hmStr+=' HRV:'+hm.hrv+'ms';
+  if(hm.sleep)hmStr+=' Avg sleep:'+hm.sleep+'hrs';
+  if(hm.steps)hmStr+=' Daily steps:~'+hm.steps;
+  var prompt=mode==='checkin'
+    ?'You are a personal trainer doing a brief 15-day check-in for a gym client.\n\n'
+      +'Client: '+profileStr+(hmStr?'\nHealth metrics:'+hmStr:'')+'\n\n'
+      +'Last 15 days of workouts:\n'+summary+'\n\n'
+      +'Give a short, energising check-in covering:\n'
+      +'1. One thing going well this week\n'
+      +'2. One thing to tweak or improve\n'
+      +'3. Two specific focus points for the next 7 days\n\n'
+      +'Keep it brief, direct and motivating. Use their actual exercise names and numbers.'
+    :'You are a personal trainer doing a comprehensive monthly review for a gym client.\n\n'
+      +'Client: '+profileStr+(hmStr?'\nHealth metrics:'+hmStr:'')+'\n\n'
+      +'Last 30 days of workouts:\n'+summary+'\n\n'
+      +'Provide a thorough review covering:\n'
+      +'1. Strengths — what they are doing well\n'
+      +'2. Muscle group balance — any gaps or neglected areas?\n'
+      +'3. Progressive overload — are weights and reps improving over time?\n'
+      +'4. Recovery — frequency, rest days, effort ratings\n'
+      +(hmStr?'5. Health metrics — comment on their RHR, HRV, sleep and steps\n':'')
+      +'6. Three specific, actionable recommendations for the next month\n\n'
+      +'Be specific. Use their actual exercise names, weights and numbers. Keep it practical and motivating.';
+  fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:prompt}]})
+  }).then(function(r){return r.json();})
+  .then(function(data){
+    clearInterval(bar);
+    var el=document.getElementById('review-bar');if(el)el.style.width='100%';
+    S.reviewResult=(data.content&&data.content[0]&&data.content[0].text)?data.content[0].text:'error';
+    setTimeout(function(){render();},300);
+  }).catch(function(){clearInterval(bar);S.reviewResult='error';render();});
 }
 
 function autoSave(){
@@ -504,8 +709,11 @@ document.addEventListener('click',function(e){
   else if(act==='graph'){S.screen='graph';render();}
   else if(act==='manage'){S.screen='manage';render();}
   else if(act==='gr'){S.graphRange=el.dataset.range;render();}
-  else if(act==='toggle-waist-unit'){
-    S.profile.waistUnit=S.profile.waistUnit==='in'?'cm':'in';
+  else if(act==='review'){S.screen='review';S.reviewResult=null;S.reviewMode=null;render();}
+  else if(act==='run-checkin'){startReview('checkin');}
+  else if(act==='run-review'){startReview('full');}
+  else if(act==='toggle-meas-unit'){
+    S.profile.measUnit=S.profile.measUnit==='in'?'cm':'in';
     saveProfile();render();
   }
   else if(act==='prev-day'){S.workoutDate=addDays(S.workoutDate||today(),-1);render();}
@@ -576,17 +784,23 @@ document.addEventListener('click',function(e){
 });
 document.addEventListener('input',function(e){
   var f=e.target.dataset.field;if(!f)return;var v=e.target.value;
-  if(f==='name'||f==='heightIn'||f==='weightLb'||f==='waist'){
+  if(f==='name'||f==='heightIn'||f==='weightLb'||f==='abdomen'||f==='waist'||f==='hip'){
     S.profile[f]=v;saveProfile();
     if(f==='weightLb'&&nv(v))logWeight(v);
+    if(f==='abdomen'&&nv(v))logAbdomen(v);
     if(f==='waist'&&nv(v))logWaist(v);
-    if(f==='heightIn'||f==='weightLb'){var b=bmi(nv(S.profile.heightIn),nv(S.profile.weightLb));var slot=document.getElementById('bmi-slot');if(slot){if(!b)slot.innerHTML='';else slot.innerHTML='<div class="divtop" style="display:flex;align-items:center;justify-content:space-between;"><div><span class="eyebrow">BMI</span><div class="mono" style="font-size:24px;color:#F2EFE9;">'+b.toFixed(1)+'</div></div><span class="tag">'+bmiLbl(b)+'</span></div>';}}return;
+    if(f==='hip'&&nv(v))logHip(v);
+    if(f==='heightIn'||f==='weightLb'){var b=bmi(nv(S.profile.heightIn),nv(S.profile.weightLb));var slot=document.getElementById('bmi-slot');if(slot){if(!b){slot.innerHTML='';}else{var whr2=buildWHR(S.profile);var ahr2=buildAHR(S.profile);slot.innerHTML='<div class="divtop" style="display:flex;align-items:center;justify-content:space-between;"><div><span class="eyebrow">BMI</span><div class="mono" style="font-size:24px;color:#F2EFE9;">'+b.toFixed(1)+'</div></div><span class="tag">'+bmiLbl(b)+'</span></div>'+ratioRow('Waist-to-Hip',whr2);}}}return;
   }
   if(f==='add-name'){S._addName=v;return;}
   if(f==='add-cat'){S._addCat=v;return;}
   if(f==='add-type'){S._addType=v;return;}
   if(f==='day-note'){S.notes[S.workoutDate||today()]=v;saveNotes();return;}
   if(f==='act-note'){if(S.entry)S.entry.note=v;return;}
+  if(f==='hm-rhr'||f==='hm-hrv'||f==='hm-sleep'||f==='hm-steps'){
+    if(!S.healthMetrics)S.healthMetrics={};
+    S.healthMetrics[f.slice(3)]=v;return;
+  }
   if(!S.entry)return;
   if(f==='incline'){S.entry.incline=v;if(S.entry.incCarried&&!S.entry.incTouched){S.entry.incTouched=true;cc(e.target);}return;}
   if(f==='speed'){S.entry.speed=v;if(S.entry.spdCarried&&!S.entry.spdTouched){S.entry.spdTouched=true;cc(e.target);}return;}
