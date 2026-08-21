@@ -229,12 +229,15 @@ function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)
 function pad(n){return n<10?'0'+n:''+n;}
 function cvtMeas(val,unit){var v=nv(val);if(!v)return'';return unit==='in'?(v*2.54).toFixed(1)+' cm':(v/2.54).toFixed(1)+' in';}
 function cvtWt(val,unit){var v=nv(val);if(!v)return'';return unit==='lb'?(v*0.4536).toFixed(1)+' kg':(v/0.4536).toFixed(1)+' lb';}
-function calcTreadmillCal(incline,speed,time,weightLb){
+function calcTreadmillCal(incline,speed,time,weightLb,heightIn){
   var spd=nv(speed),inc=nv(incline),t=nv(time),wkg=nv(weightLb)*0.4536;
   if(!spd||!t||!wkg)return 0;
   var smpm=spd*26.82;var grade=inc/100;
+  /* ACSM formula: walking <=5mph, running >5mph */
   var vo2=spd<=5?(0.1*smpm+1.8*smpm*grade+3.5):(0.2*smpm+0.9*smpm*grade+3.5);
-  return Math.round((vo2*wkg/200)*t);
+  /* height adjustment: taller people have longer stride, slightly higher efficiency */
+  var hcm=nv(heightIn)*2.54;var hAdj=hcm?Math.max(0.92,Math.min(1.08,hcm/173)):1;
+  return Math.round((vo2*wkg/200)*t/hAdj);
 }
 function addDays(ds,n){var p=ds.split('-').map(Number);var d=new Date(p[0],p[1]-1,p[2]);d.setDate(d.getDate()+n);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
 function fmtDate(s){var p=s.split('-').map(Number);return new Date(p[0],p[1]-1,p[2]).toLocaleDateString(undefined,{month:'short',day:'numeric'});}
@@ -529,9 +532,9 @@ function renderActivity(){
   var dateTag=isToday?'':'<span style="font-size:11px;color:#B2593F;border:1px solid #B2593F;border-radius:9999px;padding:1px 6px;margin-left:8px;">'+fmtDate(wd)+'</span>';
   var fields='';
   if(isC){
-    var est=calcTreadmillCal(e.incline,e.speed,e.time,S.profile.weightLb);
-    var estHint=(!nv(e.calories)&&est)?'<div style="font-size:11px;color:#8A8478;margin-top:2px;">Est: '+est+' cal based on speed &amp; incline <span style="color:#D9A441;cursor:pointer;" data-action="fill-cal" data-cal="'+est+'">&middot; use this</span></div>':'';
-    fields='<div class="surf" style="padding:16px;display:flex;flex-direction:column;gap:14px;">'+numField('Incline','incline',e.incline,'%',e.incCarried&&!e.incTouched)+numField('Speed','speed',e.speed,'mph',e.spdCarried&&!e.spdTouched)+numField('Time','time',e.time,'min',false)+'<div>'+numField('Calories Burned','calories',e.calories,'cal',false)+estHint+'</div></div>';
+    var est=calcTreadmillCal(e.incline,e.speed,e.time,S.profile.weightLb,S.profile.heightIn);
+    var estHtml=est?'Est: <strong style="color:#F2EFE9;">'+est+' cal</strong> (based on weight &amp; height) &nbsp;<span style="color:#D9A441;cursor:pointer;" data-action="fill-cal" data-cal="'+est+'">&middot; use this</span>':'Enter speed &amp; time to calculate';
+    fields='<div class="surf" style="padding:16px;display:flex;flex-direction:column;gap:14px;">'+numField('Incline','incline',e.incline,'%',e.incCarried&&!e.incTouched)+numField('Speed','speed',e.speed,'mph',e.spdCarried&&!e.spdTouched)+numField('Time','time',e.time,'min',false)+'<div>'+numField('Calories Burned','calories',e.calories,'cal',false)+'<div id="cal-est" style="font-size:11px;color:#8A8478;margin-top:4px;min-height:16px;">'+estHtml+'</div></div></div>';
   }
   else if(isR){fields='<div style="display:flex;flex-direction:column;gap:12px;">'+e.sets.map(function(s,i){return'<div class="surf" style="padding:16px;"><span class="eyebrow">Set '+(i+1)+'</span>'+numField('Weight','set-'+i+'-weight',s.weight,S.unit,s.carried&&!s.touched)+'<div class="grid2" style="margin-top:10px;">'+numField('Left Reps','set-'+i+'-leftReps',s.leftReps,'',s.repsCarried&&!s.repsTouched)+numField('Right Reps','set-'+i+'-rightReps',s.rightReps,'',s.repsCarried&&!s.repsTouched)+'</div></div>';}).join('')+'</div>';}
   else{fields='<div style="display:flex;flex-direction:column;gap:12px;">'+e.sets.map(function(s,i){return'<div class="surf" style="padding:16px;"><span class="eyebrow">Set '+(i+1)+'</span><div class="grid2">'+numField('Weight','set-'+i+'-weight',s.weight,S.unit,s.carried&&!s.touched)+numField('Reps','set-'+i+'-reps',s.reps,'',s.repsCarried&&!s.repsTouched)+'</div></div>';}).join('')+'</div>';}
@@ -787,6 +790,13 @@ function autoSave(){
   S.log.push(rec);saveLog();
 }
 
+function updateCalEst(){
+  var el=document.getElementById('cal-est');if(!el||!S.entry)return;
+  var est=calcTreadmillCal(S.entry.incline,S.entry.speed,S.entry.time,S.profile.weightLb,S.profile.heightIn);
+  if(est){el.innerHTML='Est: <strong style="color:#F2EFE9;">'+est+' cal</strong> &nbsp;<span style="color:#D9A441;cursor:pointer;" data-action="fill-cal" data-cal="'+est+'">&middot; use this</span>';}
+  else{el.innerHTML='Enter speed &amp; time to calculate';}
+}
+
 document.addEventListener('click',function(e){
   var el=e.target.closest('[data-action]');if(!el)return;var act=el.dataset.action;
   if(act==='start-today'){S.screen='list';S.workoutDate=today();S.act=null;render();}
@@ -916,9 +926,9 @@ document.addEventListener('input',function(e){
     S.healthMetrics[f.slice(3)]=v;return;
   }
   if(!S.entry)return;
-  if(f==='incline'){S.entry.incline=v;if(S.entry.incCarried&&!S.entry.incTouched){S.entry.incTouched=true;cc(e.target);}return;}
-  if(f==='speed'){S.entry.speed=v;if(S.entry.spdCarried&&!S.entry.spdTouched){S.entry.spdTouched=true;cc(e.target);}return;}
-  if(f==='time'){S.entry.time=v;return;}
+  if(f==='incline'){S.entry.incline=v;if(S.entry.incCarried&&!S.entry.incTouched){S.entry.incTouched=true;cc(e.target);}updateCalEst();return;}
+  if(f==='speed'){S.entry.speed=v;if(S.entry.spdCarried&&!S.entry.spdTouched){S.entry.spdTouched=true;cc(e.target);}updateCalEst();return;}
+  if(f==='time'){S.entry.time=v;updateCalEst();return;}
   if(f==='calories'){if(S.entry)S.entry.calories=v;return;}
   var m=f.match(/^set-(\d+)-(weight|reps|leftReps|rightReps)$/);
   if(m){var idx=parseInt(m[1]);var sub=m[2];S.entry.sets[idx][sub]=v;
