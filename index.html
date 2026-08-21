@@ -278,6 +278,27 @@ function buildOrder(){
 }
 function doneNames(date){var t=date||today();var d={};S.log.filter(function(e){return e.date===t;}).forEach(function(e){d[e.name]=e;});return d;}
 function setWt(e){if(!e||!e.sets)return 0;return e.sets.reduce(function(a,s){var r=s.leftReps!==''?nv(s.leftReps)+nv(s.rightReps):nv(s.reps);return a+nv(s.weight)*r;},0);}
+function entryReps(e){if(!e||!e.sets)return 0;return e.sets.reduce(function(a,s){return a+(s.leftReps!==''?nv(s.leftReps)+nv(s.rightReps):nv(s.reps));},0);}
+function prevEntry(name,beforeDate){return S.log.filter(function(e){return e.name===name&&e.date<beforeDate;}).sort(function(a,b){return b.date.localeCompare(a.date);})[0]||null;}
+function actDelta(curr,prev){
+  if(!prev)return'';
+  if(curr.type==='cardio'){
+    var parts=[];
+    var dt=nv(curr.time)-nv(prev.time);
+    var ds=nv(curr.speed)-nv(prev.speed);
+    var dc=nv(curr.calories)-nv(prev.calories);
+    if(Math.abs(dt)>=0.5)parts.push((dt>0?'+':'')+dt.toFixed(0)+' min');
+    if(Math.abs(ds)>=0.05)parts.push((ds>0?'+':'')+ds.toFixed(1)+' mph');
+    if(Math.abs(dc)>=1)parts.push((dc>0?'+':'')+Math.round(dc)+' cal');
+    return parts.join(' &middot; ');
+  }
+  var dv=Math.round(setWt(curr)-setWt(prev));
+  var dr=entryReps(curr)-entryReps(prev);
+  var parts2=[];
+  if(dv!==0)parts2.push((dv>0?'+':'')+dv+' lb');
+  if(dr!==0)parts2.push((dr>0?'+':'')+dr+' reps');
+  return parts2.join(' &middot; ');
+}
 function dayTotal(date){return S.log.filter(function(e){return e.date===date&&e.sets;}).reduce(function(s,e){return s+setWt(e);},0);}
 function lastEntry(name){return S.log.filter(function(e){return e.name===name;}).sort(function(a,b){return b.id-a.id;})[0]||null;}
 function entryDetail(e){
@@ -452,7 +473,9 @@ function renderList(){
   var sorted=ord.slice().sort(function(a,b){
     var aGreen=done[a.name]&&done[a.name].complete===true;
     var bGreen=done[b.name]&&done[b.name].complete===true;
-    return aGreen===bGreen?0:aGreen?1:-1;
+    if(aGreen!==bGreen)return aGreen?1:-1;
+    if(!aGreen)return a.name.localeCompare(b.name);
+    return 0;
   });
   var btns=sorted.map(function(a){
     var entry=done[a.name];
@@ -463,10 +486,22 @@ function renderList(){
       var textColor=isComplete?'#A8DFC4':'#1C1B1A';
       var catColor=isComplete?'#4A8C70':'#5A4010';
       var checkColor=isComplete?'#4AC48A':'#1C1B1A';
+      var delta='';
+      if(isComplete){
+        var prev=prevEntry(a.name,wd);
+        var d=actDelta(entry,prev);
+        if(d){
+          var isPos=d.indexOf('+')>=0&&d.indexOf('-')<0;
+          var isNeg=d.charAt(0)==='-'||(d.indexOf('-')>=0&&d.indexOf('+')<0);
+          var dColor=isPos?'#4AC48A':isNeg?'#E07050':'#8A8478';
+          delta='<div style="font-size:11px;color:'+dColor+';margin-top:2px;font-weight:600;">'+d+'</div>';
+        }
+      }
       return'<button class="card" data-action="pick" data-name="'+esc(a.name)+'" style="background:'+bg+';border-color:'+border+';">'+
         '<span style="width:11px;height:11px;border-radius:9999px;background:'+(isComplete?'#4AC48A':'#1C1B1A')+';display:inline-block;flex-shrink:0;"></span>'+
         '<div style="flex:1;text-align:left;"><div style="font-weight:600;color:'+textColor+';">'+esc(a.name)+'</div>'+
-        '<div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:'+catColor+';">'+esc(a.cat)+'</div></div>'+
+        '<div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:'+catColor+';">'+esc(a.cat)+'</div>'+
+        delta+'</div>'+
         '<span style="color:'+checkColor+';font-size:20px;font-weight:700;">&#10003;</span></button>';
     }
     return'<button class="card" data-action="pick" data-name="'+esc(a.name)+'">'+
@@ -791,7 +826,7 @@ document.addEventListener('click',function(e){
         entry.sets[j].leftReps  =lr;
         entry.sets[j].rightReps =rr;
         entry.sets[j].carried     =!fromToday&&w!=='';
-        entry.sets[j].repsCarried =!fromToday&&r!=='';
+        entry.sets[j].repsCarried =!fromToday&&(r!==''||lr!==''||rr!=='');
         entry.sets[j].repsTouched =false;
       }
     }
