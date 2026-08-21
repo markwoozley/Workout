@@ -500,7 +500,7 @@ function renderList(){
       return'<button class="card" data-action="pick" data-name="'+esc(a.name)+'" style="background:'+bg+';border-color:'+border+';">'+
         '<span style="width:11px;height:11px;border-radius:9999px;background:'+(isComplete?'#4AC48A':'#1C1B1A')+';display:inline-block;flex-shrink:0;"></span>'+
         '<div style="flex:1;text-align:left;"><div style="font-weight:600;color:'+textColor+';">'+esc(a.name)+'</div>'+
-        '<div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:'+catColor+';">'+esc(a.cat)+'</div>'+
+        '<div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:'+catColor+';">'+esc(a.cat)+(entry.rating?'&nbsp;&middot;&nbsp;'+RATING_LABEL[entry.rating]:'')+'</div>'+
         delta+'</div>'+
         '<span style="color:'+checkColor+';font-size:20px;font-weight:700;">&#10003;</span></button>';
     }
