@@ -229,6 +229,13 @@ function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)
 function pad(n){return n<10?'0'+n:''+n;}
 function cvtMeas(val,unit){var v=nv(val);if(!v)return'';return unit==='in'?(v*2.54).toFixed(1)+' cm':(v/2.54).toFixed(1)+' in';}
 function cvtWt(val,unit){var v=nv(val);if(!v)return'';return unit==='lb'?(v*0.4536).toFixed(1)+' kg':(v/0.4536).toFixed(1)+' lb';}
+function calcTreadmillCal(incline,speed,time,weightLb){
+  var spd=nv(speed),inc=nv(incline),t=nv(time),wkg=nv(weightLb)*0.4536;
+  if(!spd||!t||!wkg)return 0;
+  var smpm=spd*26.82;var grade=inc/100;
+  var vo2=spd<=5?(0.1*smpm+1.8*smpm*grade+3.5):(0.2*smpm+0.9*smpm*grade+3.5);
+  return Math.round((vo2*wkg/200)*t);
+}
 function addDays(ds,n){var p=ds.split('-').map(Number);var d=new Date(p[0],p[1]-1,p[2]);d.setDate(d.getDate()+n);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
 function fmtDate(s){var p=s.split('-').map(Number);return new Date(p[0],p[1]-1,p[2]).toLocaleDateString(undefined,{month:'short',day:'numeric'});}
 function fmtFull(s){var p=s.split('-').map(Number);return new Date(p[0],p[1]-1,p[2]).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});}
@@ -404,12 +411,11 @@ function renderHome(){
   var p=S.profile;var b=bmi(nv(p.heightIn),nv(p.weightLb));
   var t=today();var done=doneNames(t);var dc=Object.keys(done).length;var ord=buildOrder();
   var bmiHtml='';
-  var whr=buildWHR(p);
   var ahr=buildAHR(p);
   if(b){
     bmiHtml='<div class="divtop" style="display:flex;align-items:center;justify-content:space-between;"><div><span class="eyebrow">BMI</span><div class="mono" style="font-size:24px;color:#F2EFE9;">'+b.toFixed(1)+'</div></div><span class="tag">'+bmiLbl(b)+'</span></div>';
   }
-  bmiHtml+=ratioRow('Waist-to-Hip',whr);
+  bmiHtml+=ratioRow('Abdomen-to-Hip',ahr);
   var wBtn=dc>0
     ?'<div class="resume-bar"><div><div class="eyebrow" style="margin-bottom:2px;">Today&#39;s Progress</div><div style="font-size:14px;font-weight:600;color:#F2EFE9;">'+dc+' of '+ord.length+' done</div></div><button class="btn" data-action="start-today" style="width:auto;padding:10px 16px;font-size:13px;">Resume '+IC.chev+'</button></div>'
     :'<button class="btn" data-action="start-today" style="margin-bottom:12px;">Start Today&#39;s Workout '+IC.chev+'</button>';
@@ -522,7 +528,11 @@ function renderActivity(){
   var wd=S.workoutDate||today();var isToday=(wd===today());
   var dateTag=isToday?'':'<span style="font-size:11px;color:#B2593F;border:1px solid #B2593F;border-radius:9999px;padding:1px 6px;margin-left:8px;">'+fmtDate(wd)+'</span>';
   var fields='';
-  if(isC){fields='<div class="surf" style="padding:16px;display:flex;flex-direction:column;gap:14px;">'+numField('Incline','incline',e.incline,'%',e.incCarried&&!e.incTouched)+numField('Speed','speed',e.speed,'mph',e.spdCarried&&!e.spdTouched)+numField('Time','time',e.time,'min',false)+numField('Calories Burned','calories',e.calories,'cal',false)+'</div>';}
+  if(isC){
+    var est=calcTreadmillCal(e.incline,e.speed,e.time,S.profile.weightLb);
+    var estHint=(!nv(e.calories)&&est)?'<div style="font-size:11px;color:#8A8478;margin-top:2px;">Est: '+est+' cal based on speed &amp; incline <span style="color:#D9A441;cursor:pointer;" data-action="fill-cal" data-cal="'+est+'">&middot; use this</span></div>':'';
+    fields='<div class="surf" style="padding:16px;display:flex;flex-direction:column;gap:14px;">'+numField('Incline','incline',e.incline,'%',e.incCarried&&!e.incTouched)+numField('Speed','speed',e.speed,'mph',e.spdCarried&&!e.spdTouched)+numField('Time','time',e.time,'min',false)+'<div>'+numField('Calories Burned','calories',e.calories,'cal',false)+estHint+'</div></div>';
+  }
   else if(isR){fields='<div style="display:flex;flex-direction:column;gap:12px;">'+e.sets.map(function(s,i){return'<div class="surf" style="padding:16px;"><span class="eyebrow">Set '+(i+1)+'</span>'+numField('Weight','set-'+i+'-weight',s.weight,S.unit,s.carried&&!s.touched)+'<div class="grid2" style="margin-top:10px;">'+numField('Left Reps','set-'+i+'-leftReps',s.leftReps,'',s.repsCarried&&!s.repsTouched)+numField('Right Reps','set-'+i+'-rightReps',s.rightReps,'',s.repsCarried&&!s.repsTouched)+'</div></div>';}).join('')+'</div>';}
   else{fields='<div style="display:flex;flex-direction:column;gap:12px;">'+e.sets.map(function(s,i){return'<div class="surf" style="padding:16px;"><span class="eyebrow">Set '+(i+1)+'</span><div class="grid2">'+numField('Weight','set-'+i+'-weight',s.weight,S.unit,s.carried&&!s.touched)+numField('Reps','set-'+i+'-reps',s.reps,'',s.repsCarried&&!s.repsTouched)+'</div></div>';}).join('')+'</div>';}
   var rBtns=RATINGS.map(function(r){return'<button class="rating-btn'+(e.rating===r.key?' '+r.cls:'')+'" data-action="rate" data-rating="'+r.key+'">'+r.label+'</button>';}).join('');
@@ -788,6 +798,9 @@ document.addEventListener('click',function(e){
   else if(act==='review'){S.screen='review';S.reviewResult=null;S.reviewMode=null;render();}
   else if(act==='run-checkin'){startReview('checkin');}
   else if(act==='run-review'){startReview('full');}
+  else if(act==='fill-cal'){
+    if(S.entry){S.entry.calories=el.dataset.cal;render();}
+  }
   else if(act==='rate'){if(S.entry){var r=el.dataset.rating;S.entry.rating=(S.entry.rating===r?null:r);render();}}
   else if(act==='edit-rate'){if(S.editEntry){var r=el.dataset.rating;S.editEntry.rating=(S.editEntry.rating===r?null:r);render();}}
   else if(act==='toggle-meas-unit'){
@@ -888,7 +901,7 @@ document.addEventListener('input',function(e){
     if(f==='abdomen'&&nv(v))logAbdomen(v);
     if(f==='waist'&&nv(v))logWaist(v);
     if(f==='hip'&&nv(v))logHip(v);
-    if(f==='heightIn'||f==='weightLb'){var b=bmi(nv(S.profile.heightIn),nv(S.profile.weightLb));var slot=document.getElementById('bmi-slot');if(slot){if(!b){slot.innerHTML='';}else{var whr2=buildWHR(S.profile);var ahr2=buildAHR(S.profile);slot.innerHTML='<div class="divtop" style="display:flex;align-items:center;justify-content:space-between;"><div><span class="eyebrow">BMI</span><div class="mono" style="font-size:24px;color:#F2EFE9;">'+b.toFixed(1)+'</div></div><span class="tag">'+bmiLbl(b)+'</span></div>'+ratioRow('Waist-to-Hip',whr2);}}}return;
+    if(f==='heightIn'||f==='weightLb'){var b=bmi(nv(S.profile.heightIn),nv(S.profile.weightLb));var slot=document.getElementById('bmi-slot');if(slot){if(!b){slot.innerHTML='';}else{var ahr2=buildAHR(S.profile);slot.innerHTML='<div class="divtop" style="display:flex;align-items:center;justify-content:space-between;"><div><span class="eyebrow">BMI</span><div class="mono" style="font-size:24px;color:#F2EFE9;">'+b.toFixed(1)+'</div></div><span class="tag">'+bmiLbl(b)+'</span></div>'+ratioRow('Abdomen-to-Hip',ahr2);}}}return;
   }
   if(f==='add-name'){S._addName=v;return;}
   if(f==='add-cat'){S._addCat=v;return;}
