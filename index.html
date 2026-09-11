@@ -173,7 +173,7 @@ var EASY='😌 Easy',GOOD='💪 Good',HARD='🔥 Hard';
 var RATINGS=[{key:'easy',label:EASY,cls:'easy-on'},{key:'good',label:GOOD,cls:'good-on'},{key:'too_hard',label:HARD,cls:'hard-on'}];
 var RATING_COLOR={easy:'#7AC4A8',good:'#D9A441',too_hard:'#E07050'};
 var RATING_LABEL={easy:EASY,good:GOOD,too_hard:HARD};
-var S={screen:'home',profile:{name:'',heightIn:'',weightLb:'',abdomen:'',waist:'',hip:'',measUnit:'in'},log:[],weightLog:[],abdomenLog:[],waistLog:[],hipLog:[],acts:[],notes:{},act:null,entry:null,graphRange:'month',workoutDate:'',unit:'lb',reviewResult:null};
+var S={screen:'home',profile:{name:'',heightIn:'',weightLb:'',abdomen:'',waist:'',hip:'',measUnit:'in'},log:[],weightLog:[],abdomenLog:[],waistLog:[],hipLog:[],acts:[],notes:{},act:null,entry:null,graphRange:'month',workoutDate:'',unit:'lb',reviewResult:null,actFilter:null};
 function blankEntry(){return{incline:'',speed:'',time:'',calories:'',rating:null,note:'',incCarried:false,spdCarried:false,incTouched:false,spdTouched:false,sets:[0,1,2].map(function(){return{weight:'',reps:'',leftReps:'',rightReps:'',carried:false,touched:false,repsCarried:false,repsTouched:false};})}}
 function load(){
   try{var p=localStorage.getItem('il_p');if(p)S.profile=JSON.parse(p);}catch(e){}
@@ -290,6 +290,20 @@ function doneNames(date){var t=date||today();var d={};S.log.filter(function(e){r
 function setWt(e){if(!e||!e.sets)return 0;return e.sets.reduce(function(a,s){var r=s.leftReps!==''?nv(s.leftReps)+nv(s.rightReps):nv(s.reps);return a+nv(s.weight)*r;},0);}
 function entryReps(e){if(!e||!e.sets)return 0;return e.sets.reduce(function(a,s){return a+(s.leftReps!==''?nv(s.leftReps)+nv(s.rightReps):nv(s.reps));},0);}
 function prevEntry(name,beforeDate){return S.log.filter(function(e){return e.name===name&&e.date<beforeDate;}).sort(function(a,b){return b.date.localeCompare(a.date);})[0]||null;}
+function reviewReadiness(){
+  var t=today();var days15=[],days30=[];
+  S.log.forEach(function(e){
+    var age=(new Date(t)-new Date(e.date))/(86400000);
+    if(age<=15&&days15.indexOf(e.date)<0)days15.push(e.date);
+    if(age<=30&&days30.indexOf(e.date)<0)days30.push(e.date);
+  });
+  var s15=days15.length,s30=days30.length;
+  var need15=5,need30=10;
+  return{
+    sessions15:s15,need15:need15,ready15:s15>=need15,left15:Math.max(0,need15-s15),
+    sessions30:s30,need30:need30,ready30:s30>=need30,left30:Math.max(0,need30-s30)
+  };
+}
 function actDelta(curr,prev){
   if(!prev)return'';
   if(curr.type==='cardio'){
@@ -372,7 +386,15 @@ function workoutCalendar(){
     '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">'+blocks+'</div>'+
     '<div style="display:flex;justify-content:space-between;margin-top:10px;">'+
       '<span style="font-size:12px;color:#8A8478;">'+(streak>0?'🔥 '+streak+' day streak':'No active streak')+'</span>'+
-      '<span style="font-size:12px;color:#8A8478;">'+sessions+' sessions / 4 wks</span></div>';
+      '<span style="font-size:12px;color:#8A8478;">'+sessions+' sessions / 4 wks</span></div>'+
+      (function(){
+        var r=reviewReadiness();
+        function bar(val,max,col){var pct=Math.round(Math.min(val/max,1)*100);return'<div style="height:4px;background:#2E2C28;border-radius:2px;flex:1;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:2px;"></div></div>';}
+        return'<div style="margin-top:12px;padding-top:10px;border-top:1px solid #2E2C28;display:flex;flex-direction:column;gap:7px;">'+
+          '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:11px;color:#8A8478;white-space:nowrap;min-width:68px;">&#9889; Check-in</span>'+bar(r.sessions15,r.need15,'#5B8FA8')+'<span style="font-size:11px;font-weight:600;color:'+(r.ready15?'#4AC48A':'#8A8478')+';white-space:nowrap;">'+(r.ready15?'Ready!':r.left15+' more')+'</span></div>'+
+          '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:11px;color:#8A8478;white-space:nowrap;min-width:68px;">&#129504; Full Review</span>'+bar(r.sessions30,r.need30,'#D9A441')+'<span style="font-size:11px;font-weight:600;color:'+(r.ready30?'#4AC48A':'#8A8478')+';white-space:nowrap;">'+(r.ready30?'Ready!':r.left30+' more')+'</span></div>'+
+        '</div>';
+      })();
 }
 function makeLineSVG(data,key,color){
   var W=300,H=150,ml=42,mr=8,mt=14,gW=W-ml-mr,gH=H-mt-26,n=data.length;
@@ -477,7 +499,39 @@ function renderList(){
       '<button class="btn-out" data-action="home" style="margin-top:20px;">Back to Home</button></div>';
   }
   var bars=ord.map(function(a){return'<span class="pb-seg" style="background:'+(done[a.name]?CAT_COLOR[a.cat]:'#3A362F')+'" title="'+esc(a.name)+'"></span>';}).join('');
-  var sorted=ord.slice().sort(function(a,b){
+
+  /* category filter buttons */
+  var filters=[
+    {key:null,   label:'All'},
+    {key:'Arm & Shoulder', label:'Arm'},
+    {key:'Leg',  label:'Leg'},
+    {key:'Back', label:'Back'},
+    {key:'Core', label:'Core'},
+    {key:'Cardio',label:'Cardio'},
+  ];
+  var filterBtns=filters.map(function(f){
+    var active=S.actFilter===f.key;
+    var col=f.key?CAT_COLOR[f.key]:'#D9A441';
+    return'<button data-action="set-filter" data-filter="'+(f.key||'')+'" style="'+
+      'background:'+(active?col:'transparent')+';'+
+      'border:1px solid '+(active?col:'#3A362F')+';'+
+      'color:'+(active?'#1C1B1A':'#8A8478')+';'+
+      'cursor:pointer;padding:5px 10px;border-radius:9999px;font-size:11px;font-family:inherit;font-weight:'+(active?'700':'400')+';white-space:nowrap;">'+
+      f.label+'</button>';
+  }).join('');
+
+  /* apply filter */
+  /* apply filter */
+  var filteredOrd=S.actFilter?ord.filter(function(a){return a.cat===S.actFilter;}):ord;
+
+  /* find activities done in the most recent PREVIOUS session */
+  var prevDates=[];
+  S.log.forEach(function(e){if(e.date<wd&&prevDates.indexOf(e.date)<0)prevDates.push(e.date);});
+  prevDates.sort(function(a,b){return b.localeCompare(a);});
+  var prevNames={};
+  if(prevDates.length){S.log.filter(function(e){return e.date===prevDates[0];}).forEach(function(e){prevNames[e.name]=true;});}
+
+  var sorted=filteredOrd.slice().sort(function(a,b){
     var aGreen=done[a.name]&&done[a.name].complete===true;
     var bGreen=done[b.name]&&done[b.name].complete===true;
     if(aGreen!==bGreen)return aGreen?1:-1;
@@ -511,13 +565,17 @@ function renderList(){
         delta+'</div>'+
         '<span style="color:'+checkColor+';font-size:20px;font-weight:700;">&#10003;</span></button>';
     }
-    return'<button class="card" data-action="pick" data-name="'+esc(a.name)+'">'+
+    var skipped=prevDates.length>0&&!prevNames[a.name];
+    return'<button class="card" data-action="pick" data-name="'+esc(a.name)+'"'+(skipped?' style="border-color:#9B4A58;background:#1E1318;"':'')+'>'+
       '<span class="dot" style="width:11px;height:11px;background:'+CAT_COLOR[a.cat]+';"></span>'+
-      '<div style="flex:1;"><div style="font-weight:600;color:#F2EFE9;">'+esc(a.name)+'</div>'+
-      '<div class="eyebrow-sm">'+esc(a.cat)+'</div></div>'+
+      '<div style="flex:1;">'+
+        '<div style="font-weight:'+(skipped?'700':'600')+';color:'+(skipped?'#E8849A':'#F2EFE9')+';">'+esc(a.name)+'</div>'+
+        '<div class="eyebrow-sm">'+esc(a.cat)+(skipped?' &middot; <span style="color:#C4607A;font-style:italic;text-transform:none;letter-spacing:0;">not last session</span>':'')+'</div>'+
+      '</div>'+
       '<span class="muted2">'+IC.chev+'</span></button>';
   }).join('');
   return'<div class="page"><button class="back" data-action="home" style="margin-bottom:14px;">'+IC.back+' Home</button>'+dateNav+
+    '<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;-webkit-overflow-scrolling:touch;">'+filterBtns+'</div>'+
     '<div class="pb-row">'+bars+'</div>'+
     '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;">'+btns+'</div>'+
     '<div class="surf" style="padding:14px 16px;"><span class="eyebrow">Day Notes</span>'+
@@ -642,17 +700,22 @@ function renderReview(){
   if(!S.reviewResult){
     /* landing — choose mode and optionally enter health data */
     var hm=S.healthMetrics||{};
+    var rr=reviewReadiness();
     body=
       '<div style="margin-bottom:18px;">'+
         '<div class="eyebrow" style="margin-bottom:10px;">Choose review type</div>'+
         '<div style="display:flex;gap:10px;">'+
-          '<button data-action="run-checkin" class="btn" style="flex:1;flex-direction:column;gap:2px;padding:12px 6px;font-size:12px;line-height:1.3;">'+
+          '<button data-action="run-checkin" class="btn" style="flex:1;flex-direction:column;gap:2px;padding:12px 6px;font-size:12px;line-height:1.4;">'+
             '<span style="font-size:18px;">&#9889;</span>'+
-            'Check-in<br/><span style="font-weight:400;font-size:10px;opacity:.8;">Last 15 days</span>'+
+            'Check-in<br/>'+
+            '<span style="font-weight:400;font-size:10px;opacity:.85;">15 days &middot; '+rr.sessions15+'/'+rr.need15+' sessions</span><br/>'+
+            '<span style="font-size:10px;font-weight:700;color:'+(rr.ready15?'#1C1B1A':'rgba(28,27,26,0.6)+')+'">'+(rr.ready15?'&#10003; Ready!':rr.left15+' sessions to go')+'</span>'+
           '</button>'+
-          '<button data-action="run-review" class="btn" style="flex:1;flex-direction:column;gap:2px;padding:12px 6px;font-size:12px;line-height:1.3;background:#3A362F;color:#F2EFE9;">'+
+          '<button data-action="run-review" class="btn" style="flex:1;flex-direction:column;gap:2px;padding:12px 6px;font-size:12px;line-height:1.4;background:#3A362F;color:#F2EFE9;">'+
             '<span style="font-size:18px;">&#129504;</span>'+
-            'Full Review<br/><span style="font-weight:400;font-size:10px;opacity:.7;">Last 30 days</span>'+
+            'Full Review<br/>'+
+            '<span style="font-weight:400;font-size:10px;opacity:.7;">30 days &middot; '+rr.sessions30+'/'+rr.need30+' sessions</span><br/>'+
+            '<span style="font-size:10px;font-weight:700;color:'+(rr.ready30?'#4AC48A':'rgba(138,132,120,0.8)')+';">'+(rr.ready30?'&#10003; Ready!':rr.left30+' sessions to go')+'</span>'+
           '</button>'+
         '</div>'+
       '</div>'+
@@ -797,9 +860,14 @@ function updateCalEst(){
 
 document.addEventListener('click',function(e){
   var el=e.target.closest('[data-action]');if(!el)return;var act=el.dataset.action;
-  if(act==='start-today'){S.screen='list';S.workoutDate=today();S.act=null;render();}
+  if(act==='start-today'){S.screen='list';S.workoutDate=today();S.actFilter=null;S.act=null;render();}
   else if(act==='home'){if(S.screen==='activity')autoSave();S.screen='home';S.act=null;render();}
   else if(act==='list'){if(S.screen==='activity')autoSave();S.screen='list';S.act=null;render();}
+  else if(act==='set-filter'){
+    var nf=el.dataset.filter||null;
+    S.actFilter=(S.actFilter===nf)?null:nf;
+    render();
+  }
   else if(act==='graph'){S.screen='graph';render();}
   else if(act==='manage'){S.screen='manage';render();}
   else if(act==='gr'){S.graphRange=el.dataset.range;render();}
