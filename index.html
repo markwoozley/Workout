@@ -291,17 +291,15 @@ function setWt(e){if(!e||!e.sets)return 0;return e.sets.reduce(function(a,s){var
 function entryReps(e){if(!e||!e.sets)return 0;return e.sets.reduce(function(a,s){return a+(s.leftReps!==''?nv(s.leftReps)+nv(s.rightReps):nv(s.reps));},0);}
 function prevEntry(name,beforeDate){return S.log.filter(function(e){return e.name===name&&e.date<beforeDate;}).sort(function(a,b){return b.date.localeCompare(a.date);})[0]||null;}
 function reviewReadiness(){
-  var t=today();var days15=[],days30=[];
-  S.log.forEach(function(e){
-    var age=(new Date(t)-new Date(e.date))/(86400000);
-    if(age<=15&&days15.indexOf(e.date)<0)days15.push(e.date);
-    if(age<=30&&days30.indexOf(e.date)<0)days30.push(e.date);
-  });
-  var s15=days15.length,s30=days30.length;
-  var need15=3,need30=6;
+  /* count distinct workout days, sorted newest first */
+  var allDays=[];
+  S.log.forEach(function(e){if(allDays.indexOf(e.date)<0)allDays.push(e.date);});
+  allDays.sort(function(a,b){return b.localeCompare(a);});
+  var total=allDays.length;
+  var need15=4,need30=8;
   return{
-    sessions15:s15,need15:need15,ready15:s15>=need15,left15:Math.max(0,need15-s15),
-    sessions30:s30,need30:need30,ready30:s30>=need30,left30:Math.max(0,need30-s30)
+    sessions15:Math.min(total,need15),need15:need15,ready15:total>=need15,left15:Math.max(0,need15-total),
+    sessions30:Math.min(total,need30),need30:need30,ready30:total>=need30,left30:Math.max(0,need30-total)
   };
 }
 function actDelta(curr,prev){
