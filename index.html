@@ -794,73 +794,162 @@ function startReview(mode){
   S.reviewMode=mode;
   S.reviewResult='loading';
   render();
-  var days2=mode==='checkin'?15:30;
   if(S.log.length<2){S.reviewResult='error';render();return;}
-  var pct=0;var bar=setInterval(function(){
-    pct=Math.min(pct+2,88);
-    var el=document.getElementById('review-bar');
-    if(el)el.style.width=pct+'%';
-  },250);
-  var days={};
-  S.log.forEach(function(e){if(!days[e.date])days[e.date]=[];days[e.date].push(e);});
-  var dayKeys=Object.keys(days).sort();
-  var summary=dayKeys.slice(-days2).map(function(d){
-    return d+': '+days[d].map(function(e){
-      if(e.type==='cardio')return e.name+' (incline:'+e.incline+'% speed:'+e.speed+'mph time:'+e.time+'min)';
-      if(!e.sets)return e.name;
-      var setStr=e.sets.filter(function(s){return nv(s.weight)>0||nv(s.reps)>0;}).map(function(s){
-        if(s.leftReps!==undefined&&s.leftReps!=='')return nv(s.weight)+'lb L'+nv(s.leftReps)+'/R'+nv(s.rightReps);
-        return nv(s.weight)+'lb x'+nv(s.reps);
-      }).join(', ');
-      return e.name+(setStr?' ('+setStr+')':'')+(e.rating?' ['+e.rating+']':'');
-    }).join('; ');
-  }).join('\n');
-  var p=S.profile;
-  var hm=S.healthMetrics||{};
-  var profileStr='Name:'+p.name+' Height:'+p.heightIn+'in Weight:'+p.weightLb+'lb'
-    +(p.waist?' Waist:'+p.waist+(p.measUnit||'in'):'')
-    +(p.hip?' Hip:'+p.hip+(p.measUnit||'in'):'');
-  var hmStr='';
-  if(hm.rhr)hmStr+=' Resting HR:'+hm.rhr+'bpm';
-  if(hm.hrv)hmStr+=' HRV:'+hm.hrv+'ms';
-  if(hm.sleep)hmStr+=' Avg sleep:'+hm.sleep+'hrs';
-  if(hm.steps)hmStr+=' Daily steps:~'+hm.steps;
-  var prompt=mode==='checkin'
-    ?'You are a personal trainer doing a brief 15-day check-in for a gym client.\n\n'
-      +'Client: '+profileStr+(hmStr?'\nHealth metrics:'+hmStr:'')+'\n\n'
-      +'Last 15 days of workouts:\n'+summary+'\n\n'
-      +'Give a short, energising check-in covering:\n'
-      +'1. One thing going well this week\n'
-      +'2. One thing to tweak or improve\n'
-      +'3. Two specific focus points for the next 7 days\n\n'
-      +'Keep it brief, direct and motivating. Use their actual exercise names and numbers.'
-    :'You are a personal trainer doing a comprehensive monthly review for a gym client.\n\n'
-      +'Client: '+profileStr+(hmStr?'\nHealth metrics:'+hmStr:'')+'\n\n'
-      +'Last 30 days of workouts:\n'+summary+'\n\n'
-      +'Provide a thorough review covering:\n'
-      +'1. Strengths — what they are doing well\n'
-      +'2. Muscle group balance — any gaps or neglected areas?\n'
-      +'3. Progressive overload — are weights and reps improving over time?\n'
-      +'4. Recovery — frequency, rest days, effort ratings\n'
-      +(hmStr?'5. Health metrics — comment on their RHR, HRV, sleep and steps\n':'')
-      +'6. Three specific, actionable recommendations for the next month\n\n'
-      +'Be specific. Use their actual exercise names, weights and numbers. Keep it practical and motivating.';
-  var _apiKey=(S.healthMetrics&&S.healthMetrics.apikey)||'';
-  var _hdrs={'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true'};
-  if(_apiKey)_hdrs['x-api-key']=_apiKey;
-  fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:_hdrs,
-    body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:prompt}]})
-  }).then(function(r){return r.json();})
-  .then(function(data){
+
+  /* animate briefly for UX */
+  var pct=0;var bar=setInterval(function(){pct=Math.min(pct+8,95);var el=document.getElementById('review-bar');if(el)el.style.width=pct+'%';},80);
+
+  setTimeout(function(){
+    try{
+      S.reviewResult=buildLocalReview(mode);
+    }catch(ex){
+      S.reviewResult='error';
+    }
     clearInterval(bar);
     var el=document.getElementById('review-bar');if(el)el.style.width='100%';
-    S.reviewResult=(data.content&&data.content[0]&&data.content[0].text)?data.content[0].text:'error';
-    setTimeout(function(){render();},300);
-  }).catch(function(){clearInterval(bar);S.reviewResult='apierror';render();});
+    setTimeout(function(){render();},200);
+  },600);
 }
 
+function buildLocalReview(mode){
+  var days2=mode==='checkin'?15:30;
+  var p=S.profile;var hm=S.healthMetrics||{};
+  var name=p.name||'there';
+
+  /* --- Build per-day map --- */
+  var byDate={};
+  S.log.forEach(function(e){if(!byDate[e.date])byDate[e.date]=[];byDate[e.date].push(e);});
+  var cutoff=addDays(today(),-days2);
+  var recentDates=Object.keys(byDate).filter(function(d){return d>=cutoff;}).sort();
+  var allDates=Object.keys(byDate).sort();
+  var recentLog=[];recentDates.forEach(function(d){recentLog=recentLog.concat(byDate[d]);});
+
+  /* --- Frequency --- */
+  var freq=recentDates.length;
+  var totalSess=allDates.length;
+  var freqNote=freq===0?'No sessions in the last '+days2+' days.':
+    freq===1?'1 session in the last '+days2+' days.':
+    freq+' sessions in the last '+days2+' days (about '+(freq<=3?'once':'twice')+' a week).';
+
+  /* --- Category balance --- */
+  var catCount={};
+  recentLog.forEach(function(e){catCount[e.cat]=(catCount[e.cat]||0)+1;});
+  var catList=Object.keys(catCount).sort(function(a,b){return catCount[b]-catCount[a];});
+  var allCats=['Arm & Shoulder','Back','Leg','Core'];
+  var skippedCats=allCats.filter(function(c){return!catCount[c];});
+  var topCat=catList[0]||'';
+  var bottomCat=catList[catList.length-1]||'';
+
+  /* --- Progressive overload --- */
+  var progress=[];
+  S.acts.forEach(function(a){
+    if(a.type==='cardio')return;
+    var entries=S.log.filter(function(e){return e.name===a.name&&e.sets&&e.sets[0]&&nv(e.sets[0].weight)>0;}).sort(function(a,b){return a.date.localeCompare(b.date);});
+    if(entries.length<2)return;
+    var first=nv(entries[0].sets[0].weight);
+    var last=nv(entries[entries.length-1].sets[0].weight);
+    var diff=last-first;
+    if(Math.abs(diff)>=2.5)progress.push({name:a.name,first:first,last:last,diff:diff});
+  });
+  progress.sort(function(a,b){return b.diff-a.diff;});
+  var gains=progress.filter(function(p){return p.diff>0;});
+  var drops=progress.filter(function(p){return p.diff<0;});
+
+  /* --- Effort ratings --- */
+  var ratings={easy:0,good:0,too_hard:0};
+  recentLog.forEach(function(e){if(e.rating)ratings[e.rating]=(ratings[e.rating]||0)+1;});
+  var rTotal=ratings.easy+ratings.good+ratings.too_hard;
+  var ratedPct=recentLog.length>0?Math.round(rTotal/recentLog.length*100):0;
+
+  /* --- Cardio --- */
+  var cardioEntries=recentLog.filter(function(e){return e.type==='cardio'&&nv(e.time)>0;});
+  var avgTime=cardioEntries.length?Math.round(cardioEntries.reduce(function(s,e){return s+nv(e.time);},0)/cardioEntries.length):0;
+
+  /* --- Health metrics commentary --- */
+  var hmLines=[];
+  if(hm.rhr){var r=nv(hm.rhr);hmLines.push('Resting HR '+r+' bpm — '+(r<60?'excellent (athlete range)':r<70?'good':r<80?'average — room to improve with cardio':'elevated, worth monitoring')+'.');}
+  if(hm.hrv){var v=nv(hm.hrv);hmLines.push('HRV '+v+' ms — '+(v>60?'strong recovery signal':v>40?'moderate — listen to your body on hard sessions':'low, consider extra rest or stress management')+'.');}
+  if(hm.sleep){var sl=nv(hm.sleep);hmLines.push('Avg sleep '+sl+' hrs — '+(sl>=7.5?'solid — supporting muscle recovery well':sl>=6.5?'borderline — aim for 7.5+ for better gains':'below target — sleep is when muscles rebuild, prioritise this')+'.');}
+  if(hm.steps){var st=nv(hm.steps);hmLines.push('Daily steps ~'+st+' — '+(st>=10000?'active lifestyle, great base':st>=7000?'decent — a short daily walk can push this higher':'low — more daily movement will accelerate fat loss and recovery')+'.');}
+
+  /* --- Build report --- */
+  var lines=[];
+  var heading=function(t){return'\n**'+t+'**\n';};
+
+  lines.push('Hi '+name+', here is your '+(mode==='checkin'?'15-day check-in':'30-day full review')+'.\n');
+
+  /* Frequency */
+  lines.push(heading('Workout Frequency'));
+  lines.push(freqNote);
+  if(freq>=4)lines.push('Great consistency — you are building real habit momentum.');
+  else if(freq>=2)lines.push('Solid base. Aim for one more session this '+(mode==='checkin'?'fortnight':'month')+' to push into optimal range.');
+  else if(freq===1)lines.push('One session is a start, but you need 2-3 per week to see meaningful adaptation. What is getting in the way?');
+  else lines.push('No recent sessions logged. Even a short session this week will restart the streak.');
+
+  /* Muscle balance */
+  lines.push(heading('Muscle Group Balance'));
+  if(skippedCats.length===0){
+    lines.push('Good news — you hit every major muscle group this period.');
+    if(topCat)lines.push('You focused most on '+topCat+' ('+catCount[topCat]+' exercises). Make sure '+bottomCat+' gets equal attention next session.');
+  }else{
+    lines.push('You trained: '+catList.join(', ')+'.');
+    lines.push('Not touched this period: **'+skippedCats.join(', ')+'**. Skipping these consistently leads to imbalances and injury risk — add at least one session targeting these.');
+  }
+
+  /* Progressive overload */
+  lines.push(heading('Progressive Overload'));
+  if(gains.length===0&&drops.length===0){
+    lines.push('Not enough repeat sessions to measure progression yet. Keep logging the same exercises — the data will build.');
+  }else{
+    if(gains.length>0){
+      lines.push('Weight increases: '+gains.slice(0,3).map(function(g){return g.name+' +'+g.diff+'lb ('+g.first+'\u2192'+g.last+'lb)';}).join(', ')+'.');
+      if(gains.length>0)lines.push('This is exactly what progressive overload looks like — keep pushing.');
+    }
+    if(drops.length>0){
+      lines.push('Weight decreases: '+drops.slice(0,2).map(function(g){return g.name+' '+g.diff+'lb';}).join(', ')+'. Check if this is intentional (form focus) or fatigue.');
+    }
+    if(gains.length===0&&totalSess>4)lines.push('Weights are holding steady. Consider adding 2.5-5lb to your top sets next session.');
+  }
+
+  /* Effort ratings */
+  lines.push(heading('Effort & Intensity'));
+  if(rTotal===0){
+    lines.push('No effort ratings logged this period. Tap Easy, Good, or Hard after each exercise — it takes one second and helps track whether you are under or overtraining.');
+  }else{
+    lines.push('You rated '+rTotal+' of '+recentLog.length+' exercises ('+ratedPct+'%).');
+    if(ratings.easy>ratings.good+ratings.too_hard)lines.push('Most sessions felt easy — your body has adapted. Time to increase weights or add a harder variation.');
+    else if(ratings.too_hard>ratings.good)lines.push('A lot of hard sessions — watch for fatigue accumulation. Consider a lighter week if you feel run down.');
+    else lines.push('Effort ratings look well-balanced. Solid training zone.');
+  }
+
+  /* Cardio */
+  if(cardioEntries.length>0){
+    lines.push(heading('Cardio'));
+    lines.push(cardioEntries.length+' cardio session'+(cardioEntries.length>1?'s':'')+' averaging '+avgTime+' min.');
+    if(avgTime<20)lines.push('Short sessions — try to build toward 30 min for cardiovascular benefit.');
+    else lines.push('Good cardio duration. Consistency is key here.');
+  }
+
+  /* Health metrics */
+  if(hmLines.length>0){
+    lines.push(heading('Health Metrics'));
+    hmLines.forEach(function(l){lines.push(l);});
+  }
+
+  /* Recommendations */
+  lines.push(heading('Your Next '+(mode==='checkin'?'7':'30')+' Days'));
+  var recs=[];
+  if(skippedCats.length>0)recs.push('Schedule at least one session targeting **'+skippedCats[0]+'** — do not let it slip another week.');
+  if(gains.length>0)recs.push('On your next **'+gains[0].name+'**, attempt '+( gains[0].last+2.5)+'lb for your first set.');
+  else if(totalSess>3)recs.push('Pick your key lift this week and add 2.5lb to last session\'s weight.');
+  if(freq<3)recs.push('Block out '+(mode==='checkin'?'two':'four')+' specific gym times in your calendar before the week starts.');
+  if(rTotal===0)recs.push('Start rating every exercise — even just one tap. One week of data makes the review much more powerful.');
+  if(hm.sleep&&nv(hm.sleep)<7)recs.push('Prioritise sleep: aim for 7+ hours, especially on days after heavy sessions.');
+  if(recs.length===0)recs.push('Maintain your current frequency and keep adding small weight increases wherever possible.');
+  recs.slice(0,3).forEach(function(r,i){lines.push((i+1)+'. '+r);});
+
+  return lines.join('\n');
+}
 function autoSave(){
   if(!S.act||!S.entry)return;
   var a=S.act,en=S.entry,saveDate=S.workoutDate||today();
