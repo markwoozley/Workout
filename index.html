@@ -379,13 +379,17 @@ function workoutCalendar(){
     var dayNum=d.getDate();var isToday=(ds===todaySt);var isFuture=(ds>todaySt);
     var entries=logByDate[ds]||[];var cnt=entries.length;
     var bg,ring,txtColor;
-    if(isFuture){bg='#1C1B1A';ring='opacity:0.2;';txtColor='#3A3630';}
+    if(isFuture){bg='#1C1B1A';ring='opacity:0.15;';txtColor='#3A3630';}
     else if(cnt===0){bg=isToday?'#2E2C28':'#242220';ring=isToday?'outline:2px solid #D9A441;outline-offset:-2px;':'';txtColor=isToday?'#D9A441':'#9A9088';}
-    else{bg=cnt<=2?'#1F4A38':cnt<=5?'#2D6B52':'#3D8C6A';ring=isToday?'outline:2px solid #7AC4A8;outline-offset:-2px;':'';txtColor='#FFFFFF';}
-    blocks+='<div data-action="'+(isFuture?'':'cal-pick')+'" data-date="'+ds+'"'+
-      ' style="aspect-ratio:1/1;background:'+bg+';border-radius:3px;'+ring+
-      'display:flex;align-items:center;justify-content:center;'+(isFuture?'':'cursor:pointer;')+'">'+
-      '<span style="font-size:9px;font-weight:700;color:'+txtColor+';line-height:1;pointer-events:none;">'+dayNum+'</span></div>';
+    else{bg='#2D6B52';ring=isToday?'outline:2px solid #7AC4A8;outline-offset:-2px;':'';txtColor='#FFFFFF';}
+    /* use button for tappable dates so iOS Safari fires click reliably */
+    if(isFuture){
+      blocks+='<div style="aspect-ratio:1/1;background:'+bg+';border-radius:3px;'+ring+'display:flex;align-items:center;justify-content:center;'+ring+'">'+
+        '<span style="font-size:9px;font-weight:700;color:'+txtColor+';line-height:1;">'+dayNum+'</span></div>';
+    }else{
+      blocks+='<button data-action="cal-pick" data-date="'+ds+'" style="aspect-ratio:1/1;background:'+bg+';border:none;border-radius:3px;'+ring+'display:flex;align-items:center;justify-content:center;cursor:pointer;width:100%;padding:0;font-family:inherit;">'+
+        '<span style="font-size:9px;font-weight:700;color:'+txtColor+';line-height:1;pointer-events:none;">'+dayNum+'</span></button>';
+    }
   }
   var streak=0;var chk=new Date(now);
   for(var si=0;si<365;si++){var ds2=chk.getFullYear()+'-'+pad(chk.getMonth()+1)+'-'+pad(chk.getDate());if(logByDate[ds2]&&logByDate[ds2].length){streak++;chk.setDate(chk.getDate()-1);}else if(ds2===todaySt){chk.setDate(chk.getDate()-1);}else break;}
