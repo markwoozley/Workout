@@ -605,8 +605,12 @@ function renderActivity(){
     var estHtml=est?'Est: <strong style="color:#F2EFE9;">'+est+' cal</strong> (based on weight &amp; height) &nbsp;<span style="color:#D9A441;cursor:pointer;" data-action="fill-cal" data-cal="'+est+'">&middot; use this</span>':'Enter speed &amp; time to calculate';
     fields='<div class="surf" style="padding:16px;display:flex;flex-direction:column;gap:14px;">'+numField('Incline','incline',e.incline,'%',e.incCarried&&!e.incTouched)+numField('Speed','speed',e.speed,'mph',e.spdCarried&&!e.spdTouched)+numField('Time','time',e.time,'min',false)+'<div>'+numField('Calories Burned','calories',e.calories,'cal',false)+'<div id="cal-est" style="font-size:11px;color:#8A8478;margin-top:4px;min-height:16px;">'+estHtml+'</div></div></div>';
   }
-  else if(isR){fields='<div style="display:flex;flex-direction:column;gap:12px;">'+e.sets.map(function(s,i){return'<div class="surf" style="padding:16px;"><span class="eyebrow">Set '+(i+1)+'</span>'+numField('Weight','set-'+i+'-weight',s.weight,S.unit,s.carried&&!s.touched)+'<div class="grid2" style="margin-top:10px;">'+numField('Left Reps','set-'+i+'-leftReps',s.leftReps,'',s.repsCarried&&!s.repsTouched)+numField('Right Reps','set-'+i+'-rightReps',s.rightReps,'',s.repsCarried&&!s.repsTouched)+'</div></div>';}).join('')+'</div>';}
-  else{fields='<div style="display:flex;flex-direction:column;gap:12px;">'+e.sets.map(function(s,i){return'<div class="surf" style="padding:16px;"><span class="eyebrow">Set '+(i+1)+'</span><div class="grid2">'+numField('Weight','set-'+i+'-weight',s.weight,S.unit,s.carried&&!s.touched)+numField('Reps','set-'+i+'-reps',s.reps,'',s.repsCarried&&!s.repsTouched)+'</div></div>';}).join('')+'</div>';}
+  else if(isR){fields='<div style="display:flex;flex-direction:column;gap:12px;">'+e.sets.map(function(s,i){return'<div class="surf" style="padding:16px;"><span class="eyebrow">Set '+(i+1)+'</span>'+numField('Weight','set-'+i+'-weight',s.weight,S.unit,s.carried&&!s.touched)+'<div class="grid2" style="margin-top:10px;">'+numField('Left Reps','set-'+i+'-leftReps',s.leftReps,'',s.repsCarried&&!s.repsTouched)+numField('Right Reps','set-'+i+'-rightReps',s.rightReps,'',s.repsCarried&&!s.repsTouched)+'</div></div>';}).join('')+
+    '<button data-action="add-set" style="background:transparent;border:1px dashed #3A362F;color:#8A8478;border-radius:8px;padding:12px;width:100%;font-family:inherit;font-size:13px;cursor:pointer;">+ Add Set</button>'+
+    '</div>';}
+  else{fields='<div style="display:flex;flex-direction:column;gap:12px;">'+e.sets.map(function(s,i){return'<div class="surf" style="padding:16px;"><span class="eyebrow">Set '+(i+1)+'</span><div class="grid2">'+numField('Weight','set-'+i+'-weight',s.weight,S.unit,s.carried&&!s.touched)+numField('Reps','set-'+i+'-reps',s.reps,'',s.repsCarried&&!s.repsTouched)+'</div></div>';}).join('')+
+    '<button data-action="add-set" style="background:transparent;border:1px dashed #3A362F;color:#8A8478;border-radius:8px;padding:12px;width:100%;font-family:inherit;font-size:13px;cursor:pointer;">+ Add Set</button>'+
+    '</div>';}
   var rBtns=RATINGS.map(function(r){return'<button class="rating-btn'+(e.rating===r.key?' '+r.cls:'')+'" data-action="rate" data-rating="'+r.key+'">'+r.label+'</button>';}).join('');
   return'<div class="page">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><button class="back" data-action="list">'+IC.back+' Activities</button><button class="back" data-action="home" style="text-decoration:underline;text-underline-offset:3px;">Summary</button></div>'+
@@ -996,6 +1000,9 @@ document.addEventListener('click',function(e){
   else if(act==='run-review'){startReview('full');}
   else if(act==='fill-cal'){
     if(S.entry){S.entry.calories=el.dataset.cal;render();}
+  }
+  else if(act==='add-set'){
+    if(S.entry){S.entry.sets.push({weight:'',reps:'',leftReps:'',rightReps:'',carried:false,touched:false,repsCarried:false,repsTouched:false});render();}
   }
   else if(act==='rate'){if(S.entry){var r=el.dataset.rating;S.entry.rating=(S.entry.rating===r?null:r);render();}}
   else if(act==='edit-rate'){if(S.editEntry){var r=el.dataset.rating;S.editEntry.rating=(S.editEntry.rating===r?null:r);render();}}
